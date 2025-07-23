@@ -1,0 +1,1566 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Управление автоматами Vendista</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    :root { 
+      --primary-color: #007bff; 
+      --primary-hover-color: #0056b3; 
+      --secondary-color: #6c757d; 
+      --secondary-hover-color: #5a6268;
+      --success-color: #28a745; 
+      --success-hover-color: #1e7e34; 
+      --danger-color: #dc3545; 
+      --danger-hover-color: #bd2130;
+      --warning-color: #ffc107; 
+      --warning-hover-color: #e0a800;
+      --info-color: #17a2b8; 
+      --info-hover-color: #117a8b;
+
+      --light-color: hsl(210, 20%, 98%); 
+      --dark-color: #333; 
+      --text-color: #333; 
+      --label-color: #555; 
+      --border-color: hsl(210, 15%, 85%); 
+      --input-bg-color: #fff; 
+      --surface-color: #fff; 
+
+      --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --border-radius: 0.25rem; 
+      --box-shadow: 0 0.25rem 0.5rem rgba(0,0,0,0.08); 
+    }
+    * { box-sizing: border-box; }
+    body { font-family: var(--font-family); background-color: var(--light-color); margin: 0; color: var(--text-color); font-size: 0.95rem; line-height: 1.55; }
+    .container-main { max-width: 1200px; margin: 0 auto; padding: 1.5rem 1rem; }
+    h1, h2 { font-size: 1.6em; margin-bottom: 0.5rem; color: var(--dark-color); text-align: center; font-weight: 600; }
+    h2 { font-size: 1.4em; margin-top: 1.5rem; }
+    .section-block { background: var(--surface-color); padding: 1.25rem; border-radius: var(--border-radius); box-shadow: var(--box-shadow); margin-bottom: 1.5rem; border: 1px solid var(--border-color); }
+    
+    .filters-row { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end;  }
+    .filters-row .filter-cell { display: flex; flex-direction: column; flex-grow: 1; min-width: 250px; } 
+    .label, .filter-label { font-size: 0.88em; color: var(--label-color); font-weight: 500; margin-bottom: 0.25rem; display: block; } 
+    .input-group { position: relative; display: flex; align-items: center; width: 100%; }
+    input[type="text"], input[type="number"], input[type="password"], select, .dropdown-input { 
+      width: 100%; padding: 0.45rem 0.7rem; 
+      border: 1px solid var(--border-color); 
+      border-radius: var(--border-radius); 
+      background: var(--input-bg-color); 
+      font-size: 0.95em; 
+      transition: border-color 0.2s, box-shadow 0.2s; 
+      min-width: 0; outline: none; 
+    }
+    input[type="text"]:focus, input[type="number"]:focus, input[type="password"]:focus, select:focus, .dropdown-input:focus { 
+      border-color: var(--primary-color); 
+      box-shadow: 0 0 0 0.18rem rgba(0,123,255,0.25); 
+    }
+    input[readonly] { background-color: var(--light-color); cursor: default; } 
+    
+    .dropdown-btn { 
+      position: absolute; right: 1px; top: 1px; bottom: 1px; 
+      background: var(--light-color); 
+      border: none; border-left: 1px solid var(--border-color); 
+      border-radius: 0 var(--border-radius) var(--border-radius) 0; 
+      cursor: pointer; font-size: 1.1em; color: var(--secondary-color); 
+      width: 38px; 
+      z-index: 2; display: flex; align-items: center; justify-content: center; 
+      transition: background-color 0.2s, color 0.2s; 
+    }
+    .dropdown-btn:hover { color: var(--primary-color); background-color: hsl(210, 10%, 90%); } 
+    
+    .dropdown-menu { 
+      position: absolute; top: calc(100% + 5px); 
+      left: 0; width: 100%; 
+      background: var(--surface-color); 
+      border: 1px solid var(--border-color); 
+      border-radius: var(--border-radius); 
+      box-shadow: var(--box-shadow); 
+      display: none; max-height: 180px; 
+      overflow-y: auto; z-index: 1001; font-size: 0.9em; 
+    }
+    .dropdown-item { 
+      padding: 0.6rem 0.8rem; 
+      border-bottom: 1px solid hsl(210, 10%, 95%); 
+      cursor: pointer; transition: background-color 0.15s; 
+      word-break: break-word; 
+      color: var(--text-color); 
+    }
+    .dropdown-item:last-child { border-bottom: none; } 
+    .dropdown-item:hover { background-color: rgba(0,123,255,0.1); }
+    .dropdown-item.no-results, .dropdown-item.clear-selection { color: var(--secondary-color); font-style: italic; }
+    
+    .btn { 
+      padding: 0.5rem 0.9rem; 
+      border: 1px solid transparent; 
+      border-radius: var(--border-radius); 
+      cursor: pointer; font-size: 0.95em; 
+      font-weight: 500; color: #fff; 
+      transition: background-color 0.18s, transform 0.12s, box-shadow 0.18s; 
+      text-align: center; line-height: 1.5; white-space: nowrap; margin: 3px; 
+      box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075); 
+    }
+    .btn:hover:not(:disabled) { box-shadow: 0 0.25rem 0.5rem rgba(0,0,0,0.1); transform: translateY(-1px); } 
+    .btn:active:not(:disabled) { transform: translateY(1px); box-shadow: 0 0.05rem 0.1rem rgba(0,0,0,0.1); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; box-shadow: none; } 
+
+    .btn-primary { background-color: var(--primary-color); border-color: var(--primary-color); } .btn-primary:hover:not(:disabled) { background-color: var(--primary-hover-color); border-color: var(--primary-hover-color); }
+    .btn-success { background-color: var(--success-color); border-color: var(--success-color); } .btn-success:hover:not(:disabled) { background-color: var(--success-hover-color); border-color: var(--success-hover-color); }
+    .btn-info { background-color: var(--info-color); border-color: var(--info-color); } .btn-info:hover:not(:disabled) { background-color: var(--info-hover-color); border-color: var(--info-hover-color);}
+    .btn-warning { background-color: var(--warning-color); border-color: var(--warning-color); color: var(--dark-color);} .btn-warning:hover:not(:disabled) { background-color: var(--warning-hover-color); border-color: var(--warning-hover-color);}
+    .btn-danger { background-color: var(--danger-color); border-color: var(--danger-color); } .btn-danger:hover:not(:disabled) { background-color: var(--danger-hover-color); border-color: var(--danger-hover-color);}
+    .btn-secondary { background-color: var(--secondary-color); border-color: var(--secondary-color); } .btn-secondary:hover:not(:disabled) { background-color: var(--secondary-hover-color); border-color: var(--secondary-hover-color);}
+    .btn-sm { padding: 0.3rem 0.6rem; font-size: 0.85em; } 
+
+    .action-buttons-row { display: flex; justify-content: center; gap: 0.8rem; margin: 1.5rem 0; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 5px; } 
+    .btn.action-btn { flex-shrink: 0; min-width: auto; } 
+
+    #machineDisplayTable, #formMatrixProductsTable, #allProductsTable { 
+      width: 100%; border-collapse: collapse; margin-top: 1.2rem; font-size: 0.9em; 
+      background: var(--surface-color); 
+      border-radius: var(--border-radius); overflow: hidden; 
+      border: 1px solid var(--border-color); 
+    }
+    #machineDisplayTable th, #machineDisplayTable td, 
+    #formMatrixProductsTable th, #formMatrixProductsTable td,
+    #allProductsTable th, #allProductsTable td { 
+      border: 1px solid var(--border-color); 
+      padding: 0.6rem 0.8rem; 
+      text-align: left; vertical-align: middle; 
+    }
+    #machineDisplayTable thead th, #formMatrixProductsTable thead th, #allProductsTable thead th { 
+      background-color: hsl(210, 10%, 95%); 
+      font-weight: 600; white-space: nowrap; 
+      color: var(--label-color);
+    }
+    #machineDisplayTable td input[type="number"],
+    #formMatrixProductsTable input[type="number"] { 
+      width: 80px; text-align: center; padding: 0.3rem; font-size: 0.95em; 
+      border: 1px solid hsl(210, 15%, 85%); border-radius: var(--border-radius);
+    }
+    #machineDisplayTable td.editable input[type="number"] { border-color: var(--primary-color); background-color: hsl(210, 80%, 97%); } 
+
+    .form-footer { 
+      margin-top: 1.5rem; padding-top: 1rem; 
+      border-top: 1px solid hsl(210, 10%, 90%); 
+      display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0.8rem; 
+    }
+    
+    .status-message-bar { 
+      padding: 0.8rem 1.2rem; margin-bottom: 1rem; 
+      border: 1px solid transparent; border-radius: var(--border-radius); 
+      font-weight: 600; text-align: center; font-size: 0.95em; 
+      box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.05); 
+    }
+    .status-message-bar.hidden { display: none; } 
+    .status-message-bar.success { color: #155724; background-color: #d4edda; border-color: #c3e6cb; }
+    .status-message-bar.error { color: #721c24; background-color: #f8d7da; border-color: #f5c6cb; } 
+    .status-message-bar.info { color: #0c5460; background-color: #d1ecf1; border-color: #bee5eb; }
+    .status-message-bar.warning { color: #856404; background-color: #fff3cd; border-color: #ffeeba; }
+
+    .form-section { margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px dashed hsl(210, 10%, 90%); }
+    .form-section:last-child { border-bottom: none; }
+    .form-field small { display: none; /* Подписи под полями основной формы скрыты */ }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.6rem; }
+    .form-field { margin-bottom: 0.8rem; /* Добавлен отступ для полей, когда они в столбец */ }
+
+
+    .modal { display: none; position: fixed; z-index: 1050; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); }
+    .modal-content { background-color: var(--surface-color); margin: 8% auto; padding: 25px; border: none; width: 90%; max-width: 550px; border-radius: var(--border-radius); box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.2); }
+    .modal-header { padding-bottom: 15px; border-bottom: 1px solid hsl(210, 10%, 90%); margin-bottom: 15px; } 
+    .modal-header h3 { font-size: 1.3em; color: var(--dark-color); }
+    .modal-body { padding: 15px 0; }
+    .modal-body .form-field small { display: block; /* В модальных окнах подсказки могут быть полезны */ }
+    .modal-footer { padding-top: 15px; border-top: 1px solid hsl(210, 10%, 90%); margin-top: 15px; text-align: right; }
+    .close-btn { color: #888; font-size: 30px; font-weight: bold; cursor: pointer; transition: color 0.2s; }
+    .close-btn:hover, .close-btn:focus { color: var(--danger-color); text-decoration: none; }
+
+    #formMachineTerminalDropdownMenu, #primaryTidDropdownMenu, #reserveTidDropdownMenu { 
+      position: absolute; top: calc(100% + 5px); 
+      left: 0; width: 100%; 
+      background: var(--surface-color); 
+      border: 1px solid var(--border-color); 
+      border-radius: var(--border-radius); 
+      box-shadow: var(--box-shadow); 
+      display: none; max-height: 180px; 
+      overflow-y: auto; z-index: 1001; font-size: 0.9em; 
+    }
+
+    /* Адаптивность */
+    @media (max-width: 992px) { 
+      .action-buttons-row { flex-wrap: wrap; justify-content: center; } 
+      .btn.action-btn { width: calc(50% - 0.8rem); margin-bottom: 0.8rem; } 
+      .btn.action-btn:last-child { margin-bottom: 0; }
+      .btn.action-btn:nth-child(odd):last-child { width: calc(50% - 0.8rem); } 
+    }
+    @media (max-width: 768px) { 
+      .filters-row .filter-cell { min-width: 100%; }
+      .form-grid { grid-template-columns: 1fr; /* Все поля в один столбец */ }
+      .form-footer .btn { width: calc(50% - 0.5rem); margin-bottom: 0.5rem; } 
+      .form-footer .btn:last-child { margin-bottom: 0;}
+    }
+    @media (max-width: 480px) { 
+      .form-footer .btn, .action-buttons-row .btn.action-btn { width: 100%; margin-bottom: 0.8rem; } 
+      .action-buttons-row { flex-direction: column; align-items: stretch; }
+      .action-buttons-row .btn.action-btn:last-child { margin-bottom: 0;}
+    }
+  </style>
+</head>
+<body>
+  <div class="container-main">
+    <h1>Управление автоматами Vendista</h1>
+    <div id="globalStatusMessage" class="status-message-bar hidden"></div>
+
+    <div class="section-block">
+        <div class="filters-row">
+            <div class="filter-cell" style="flex-grow:1.5;">
+                <label class="filter-label" for="tokenInput">Токен API*</label>
+                <input type="password" id="tokenInput" placeholder="Токен API" autocomplete="off">
+            </div>
+            <div class="filter-cell" style="flex-grow:2.5;">
+                <label class="filter-label" for="machineSelectDropdownInput">Выберите Автомат</label>
+                 <div class="input-group">
+                    <input type="text" id="machineSelectDropdownInput" class="dropdown-input" placeholder="Поиск автомата..." autocomplete="off">
+                    <button type="button" id="machineSelectDropdownBtn" class="dropdown-btn" aria-expanded="false" aria-controls="machineSelectDropdownMenu">▼</button>
+                    <div id="machineSelectDropdownMenu" class="dropdown-menu"></div>
+                </div>
+            </div>
+        </div>
+         <div class="action-buttons-row">
+            <button id="viewSelectedMachineBtn" class="btn btn-primary action-btn">Просмотр/Обновить</button>
+            <button id="editSelectedMachineBtn" class="btn btn-warning action-btn" style="display:none;">Редактировать Автомат</button>
+            <button id="createNewMachineBtn" class="btn btn-success action-btn">Создать Новый Автомат</button>
+            <button type="button" id="manageAllProductsBtnGlobal" class="btn btn-secondary action-btn">Управление Всеми Товарами</button>
+            <button id="deleteSelectedMachineBtn" class="btn btn-danger action-btn" style="display:none;">Удалить Выбранный Автомат</button>
+        </div>
+    </div>
+    
+    <div id="mainDisplayArea">
+        <p style="text-align:center; color: var(--secondary-color);">Выберите автомат для просмотра или нажмите "Создать Новый Автомат".</p>
+    </div>
+
+  <div id="addNewProductModal" class="modal"><div class="modal-content"><div class="modal-header"><h3>Добавить Новый Товар</h3><span class="close-btn" id="closeNewProductModalBtn">&times;</span></div><div class="modal-body"><form id="newProductFormInternal"><div class="form-field"><label class="label" for="newProductNameModal">Наименование Товара*:</label><input type="text" id="newProductNameModal" required><small>Будет создан Ингредиент (measure:3), Рецепт (count:1) и Товар (subject_type:1).</small></div></form></div><div class="modal-footer"><button type="button" id="saveNewProductModalBtn" class="btn btn-success">Сохранить Товар</button><button type="button" id="cancelNewProductModalBtn" class="btn btn-secondary">Отмена</button></div></div></div>
+  <div id="selectExistingProductModal" class="modal"><div class="modal-content" style="max-width: 700px;"><div class="modal-header"><h3>Выбрать Существующий Товар</h3><span class="close-btn" id="closeSelectProductModalBtn">&times;</span></div><div class="modal-body"><input type="text" id="existingProductSearchInput" placeholder="Поиск..." style="margin-bottom: 10px; width: 100%;"><div id="existingProductListContainer" style="max-height: 300px; overflow-y: auto; border: 1px solid var(--border-color); padding: 5px;"><p>Загрузка...</p></div></div><div class="modal-footer"><button type="button" id="cancelSelectProductModalBtn" class="btn btn-secondary">Отмена</button></div></div></div>
+  <div id="editProductNameModal" class="modal"><div class="modal-content"><div class="modal-header"><h3>Редактировать Наименование Товара</h3><span class="close-btn" id="closeEditProductModalBtn">&times;</span></div><div class="modal-body"><form id="editProductFormInternal"><input type="hidden" id="editingProductIdModal"><div class="form-field"><label class="label" for="editProductNameModalInput">Новое наименование*:</label><input type="text" id="editProductNameModalInput" required></div></form></div><div class="modal-footer"><button type="button" id="saveEditedProductNameBtn" class="btn btn-success">Сохранить Имя</button><button type="button" id="cancelEditProductModalBtn" class="btn btn-secondary">Отмена</button></div></div></div>
+
+  <script>
+    const VENDISTA_API_TOKEN_CONST = "fe38f8470367451f81228617";
+    const MAX_SLOTS_IN_MATRIX = 12; 
+    const DEFAULT_MACHINE_MODEL_ID = 3081; // ID для "VendSale"
+    const DEFAULT_PROCESSING_ID = 100; // Для основного TID
+
+    // UI элементы
+    const tokenInput = document.getElementById('tokenInput');
+    const globalStatusMessage = document.getElementById('globalStatusMessage');
+    const mainDisplayArea = document.getElementById('mainDisplayArea');
+    const machineSelectDropdownInput = document.getElementById('machineSelectDropdownInput');
+    const machineSelectDropdownBtn = document.getElementById('machineSelectDropdownBtn');
+    const machineSelectDropdownMenu = document.getElementById('machineSelectDropdownMenu');
+    const viewSelectedMachineBtn = document.getElementById('viewSelectedMachineBtn');
+    const editSelectedMachineBtn = document.getElementById('editSelectedMachineBtn');
+    const createNewMachineBtn = document.getElementById('createNewMachineBtn');
+    const manageAllProductsBtnGlobal = document.getElementById('manageAllProductsBtnGlobal'); 
+    const deleteSelectedMachineBtn = document.getElementById('deleteSelectedMachineBtn');
+    
+    const addNewProductModal = document.getElementById('addNewProductModal');
+    const closeNewProductModalBtn = () => closeModal(addNewProductModal);
+    const newProductNameModalInput = document.getElementById('newProductNameModal');
+    const saveNewProductModalBtn = document.getElementById('saveNewProductModalBtn');
+    const cancelNewProductModalBtn = () => closeModal(addNewProductModal);
+    
+    const selectExistingProductModal = document.getElementById('selectExistingProductModal');
+    const closeSelectProductModalBtn = () => closeModal(selectExistingProductModal);
+    const existingProductSearchInput = document.getElementById('existingProductSearchInput');
+    const existingProductListContainer = document.getElementById('existingProductListContainer');
+    const cancelSelectProductModalBtn = () => closeModal(selectExistingProductModal);
+
+    const editProductNameModal = document.getElementById('editProductNameModal');
+    const closeEditProductModalBtn = () => closeModal(editProductNameModal);
+    const editingProductIdModalInput = document.getElementById('editingProductIdModal');
+    const editProductNameModalInput = document.getElementById('editProductNameModalInput');
+    const saveEditedProductNameBtn = document.getElementById('saveEditedProductNameBtn');
+    const cancelEditProductModalBtn = () => closeModal(editProductNameModal);
+
+    // Состояния
+    let allMachinesForDropdown = []; 
+    let allProductsCache = []; 
+    let allTerminalsCache = []; 
+    let allMachineModelsCache = []; 
+    let allTidsCacheMasterList = []; 
+    let availableTidsList = [];      
+    let currentSelectedMachineFullData = null; 
+    let isIngredientsEditMode = false; 
+    let currentFormMode = 'view'; 
+    let createdMachineIdForIngredients = null; 
+
+    // --- Вспомогательные функции UI ---
+    function hideGlobalStatus() { if (globalStatusMessage.timeoutId) clearTimeout(globalStatusMessage.timeoutId); globalStatusMessage.classList.add('hidden'); }
+    function showStatus(message, type = 'info', duration = 7000, keepExisting = false) { if (!keepExisting) hideGlobalStatus(); console.log(`Status (${type}): ${message}`); globalStatusMessage.textContent = message; globalStatusMessage.className = `status-message-bar ${type}`; globalStatusMessage.classList.remove('hidden'); if (globalStatusMessage.timeoutId) clearTimeout(globalStatusMessage.timeoutId); if (duration > 0) globalStatusMessage.timeoutId = setTimeout(() => globalStatusMessage.classList.add('hidden'), duration); }
+    function setLoadingState(isLoading, buttonElement = null, loadingText = 'Загрузка...') { hideGlobalStatus(); if (buttonElement) { buttonElement.disabled = isLoading; if (isLoading) { buttonElement.dataset.originalText = buttonElement.textContent; buttonElement.textContent = loadingText; } else if (buttonElement.dataset.originalText) { buttonElement.textContent = buttonElement.dataset.originalText; delete buttonElement.dataset.originalText; } } document.body.style.cursor = isLoading ? 'wait' : 'default'; }
+    function formatTime(timeStr) { if (!timeStr) return "неизвестно"; try { const d = new Date(timeStr); if (isNaN(d.getTime())) return timeStr; if (d.getTime() === 0 || (d.getUTCFullYear() === 1970 && d.getUTCMonth() === 0 && d.getUTCDate() === 1)) if (timeStr.includes("0001-01-01") || timeStr.includes("1970-01-01T00:00:00")) return "неизвестно"; const z = n => String(n).padStart(2, '0'); return `${z(d.getDate())}.${z(d.getMonth() + 1)}.${d.getFullYear()} ${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}`; } catch (e) { return timeStr; } }
+    function toggleDropdown(dropdownMenu, button) { hideGlobalStatus(); const isExpanded = dropdownMenu.style.display === 'block'; dropdownMenu.style.display = isExpanded ? 'none' : 'block'; button.setAttribute('aria-expanded', String(!isExpanded)); }
+    function hideDropdown(dropdownMenu, button) { if (dropdownMenu && button) { dropdownMenu.style.display = 'none'; button.setAttribute('aria-expanded', 'false'); } }
+    function openModal(el) { el.style.display = 'block'; } function closeModal(el) { el.style.display = 'none'; }
+
+    google.script.runWithPromiseWrapper = function(functionName, ...args) {
+      return new Promise((resolve, reject) => {
+          google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[functionName](...args);
+      });
+    };
+    
+    async function loadAllMachinesForDropdown() {
+        const token = tokenInput.value.trim(); 
+        if (!token) { allMachinesForDropdown = []; populateMachineSelectDropdown(); return; }
+        setLoadingState(true);
+        try {
+            const result = await google.script.runWithPromiseWrapper('getMachinesList', token);
+            if (result && result.success && Array.isArray(result.items)) {
+                allMachinesForDropdown = result.items.map(m => ({ id: m.id, name: m.name, address: m.address, product_matrix_id: m.product_matrix_id, terminal_id: m.terminal_id }));
+            } else { 
+                allMachinesForDropdown = []; 
+                showStatus(`Не удалось загрузить список автоматов: ${result.error || 'нет данных'}`, "warning");
+            }
+        } catch (error) { 
+            allMachinesForDropdown = []; 
+            showStatus(`Сбой загрузки автоматов: ${error.message || error}`, "error");
+        }
+        populateMachineSelectDropdown(machineSelectDropdownInput.value.trim());
+        setLoadingState(false);
+    }
+
+    function populateMachineSelectDropdown(filterText = "") {
+        machineSelectDropdownMenu.innerHTML = "";
+        const clearDiv = Object.assign(document.createElement('div'), { className: 'dropdown-item clear-selection', textContent: '--- Очистить ---' });
+        clearDiv.onclick = () => { 
+            machineSelectDropdownInput.value = ''; 
+            delete machineSelectDropdownInput.dataset.selectedMachineId; 
+            editSelectedMachineBtn.style.display = 'none'; 
+            deleteSelectedMachineBtn.style.display = 'none'; 
+            mainDisplayArea.innerHTML = '<p>Выберите автомат.</p>'; 
+            currentFormMode = 'view'; 
+            currentSelectedMachineFullData = null; 
+            populateMachineSelectDropdown(); 
+        };
+        machineSelectDropdownMenu.appendChild(clearDiv);
+
+        const filtered = allMachinesForDropdown.filter(m => 
+            (m.name && m.name.toLowerCase().includes(filterText.toLowerCase())) || 
+            (m.address && m.address.toLowerCase().includes(filterText.toLowerCase()))
+        );
+
+        if (filtered.length === 0) { 
+            machineSelectDropdownMenu.insertAdjacentHTML('beforeend', `<div class="dropdown-item no-results">${allMachinesForDropdown.length > 0 ? 'Не найдено.' : 'Список пуст.'}</div>`); 
+        } else {
+            filtered.forEach(m => {
+                const div = Object.assign(document.createElement('div'), { className: 'dropdown-item', textContent: `${m.name} | ${m.address || "N/A"}`});
+                div.dataset.machineId = m.id;
+                div.onclick = () => {
+                    machineSelectDropdownInput.value = div.textContent; 
+                    machineSelectDropdownInput.dataset.selectedMachineId = m.id;
+                    hideDropdown(machineSelectDropdownMenu, machineSelectDropdownBtn);
+                    editSelectedMachineBtn.style.display = 'inline-block'; 
+                    deleteSelectedMachineBtn.style.display = 'inline-block';
+                    showForm('viewMachine');
+                };
+                machineSelectDropdownMenu.appendChild(div);
+            });
+        }
+    }
+    
+    function showForm(formType) {
+        mainDisplayArea.innerHTML = ''; 
+        currentFormMode = formType; 
+        isIngredientsEditMode = false; 
+        if (formType === 'viewMachine') {
+            loadAndDisplaySelectedMachineData();
+        } else if (formType === 'createMachine') {
+            renderCreateEditMachineForm(null); 
+        } else if (formType === 'editMachine') {
+            if (currentSelectedMachineFullData) renderCreateEditMachineForm(currentSelectedMachineFullData);
+            else { showStatus("Данные для редактирования не загружены. Сначала выберите и просмотрите автомат.", "warning"); mainDisplayArea.innerHTML = '<p>Сначала выберите и просмотрите автомат.</p>';}
+        } else if (formType === 'manageProducts') {
+            showAllProductsManagementUI();
+        } else {
+            mainDisplayArea.innerHTML = '<p>Выберите действие.</p>';
+        }
+    }
+
+    async function loadAndDisplaySelectedMachineData(statusType = null) {
+        const token = tokenInput.value.trim(); 
+        const machineId = machineSelectDropdownInput.dataset.selectedMachineId;
+        if (!token || !machineId) { showStatus("Токен или ID автомата не выбраны.", "error"); return; }
+        setLoadingState(true, viewSelectedMachineBtn, "Загрузка...");
+        mainDisplayArea.innerHTML = "<p>Загрузка данных автомата...</p>";
+        try {
+            const result = await google.script.runWithPromiseWrapper('getMachineDetailsForView', { token, machineId });
+            setLoadingState(false, viewSelectedMachineBtn);
+            if (result.success) {
+                currentSelectedMachineFullData = result; 
+                renderMachineDataForViewUI(statusType);
+                if (!statusType) showStatus("Данные автомата загружены.", "success");
+                editSelectedMachineBtn.style.display = 'inline-block';
+                deleteSelectedMachineBtn.style.display = 'inline-block';
+            } else {
+                showStatus(`Ошибка загрузки: ${result.error || 'Неизвестно'}`, "error");
+                mainDisplayArea.innerHTML = `<p style="color:red;">Ошибка: ${result.error || 'Не удалось загрузить данные.'}</p>`;
+                editSelectedMachineBtn.style.display = 'none';
+                deleteSelectedMachineBtn.style.display = 'none';
+            }
+        } catch (error) { 
+            setLoadingState(false, viewSelectedMachineBtn); 
+            showStatus(`Сбой загрузки: ${error.message || error}`, "error"); 
+            mainDisplayArea.innerHTML = `<p style="color:red;">Сбой: ${error.message || error}</p>`; 
+            editSelectedMachineBtn.style.display = 'none'; 
+            deleteSelectedMachineBtn.style.display = 'none';
+        }
+    }
+    
+    function renderMachineDataForViewUI(statusType = null) {
+        mainDisplayArea.innerHTML = '';
+        if (!currentSelectedMachineFullData || !currentSelectedMachineFullData.machine) { mainDisplayArea.innerHTML = "<p>Нет данных для отображения.</p>"; return; }
+        const { machine, productMatrix, ingredients, matrixError, ingredientsError } = currentSelectedMachineFullData;
+        let html = `<div class="section-block"><h2>Просмотр: ${machine.name} (${machine.address || 'N/A'})</h2>`;
+        if (statusType === "ingredients-saved") html += `<div class="status-message-bar success">✅ Остатки сохранены.</div>`;
+        if (matrixError) html += `<div class="status-message-bar warning">Матрица: ${matrixError}</div>`;
+        if (ingredientsError) html += `<div class="status-message-bar warning">Ингредиенты: ${ingredientsError}</div>`;
+        html += `<table id="machineDisplayTable"><thead><tr><th>Отсек</th><th>Наименование</th><th>Остаток</th><th>Вместимость</th></tr></thead><tbody>`;
+        const matrixProducts = (productMatrix && Array.isArray(productMatrix.products)) ? productMatrix.products : [];
+        const machineIngredients = Array.isArray(ingredients) ? ingredients : [];
+        const displaySlotCount = Math.max(matrixProducts.length, MAX_SLOTS_IN_MATRIX);
+
+        for (let i = 0; i < displaySlotCount; i++) {
+            const slotNumber = i + 1;
+            const matrixItem = matrixProducts.find(p => p.item_id === slotNumber);
+            const productNameFromMatrix = matrixItem ? matrixItem.product_name : `Отсек ${slotNumber} (пусто)`;
+            let ingredientData = null, loadingVal = '', capacityVal = '', ingredientIdForSave = null, criticalVal = 0;
+            if (matrixItem && machineIngredients.length > 0) {
+                ingredientData = machineIngredients.find(ing => ing.ingredient_name && ing.ingredient_name.trim().toLowerCase() === productNameFromMatrix.trim().toLowerCase());
+            }
+            if(ingredientData){ 
+                loadingVal = ingredientData.loading ?? ''; 
+                capacityVal = ingredientData.capacity ?? ''; 
+                ingredientIdForSave = ingredientData.ingredient_id; 
+                criticalVal = ingredientData.critical || 0;
+            }
+            html += `<tr data-slot-number="${slotNumber}" data-product-name-matrix="${productNameFromMatrix.replace(/"/g, '&quot;')}" data-ingredient-id-for-save="${ingredientIdForSave || ''}" data-critical-value="${criticalVal}">
+                        <td>${slotNumber}</td><td>${productNameFromMatrix}</td>
+                        <td class="ingredient-loading">${isIngredientsEditMode && ingredientIdForSave ? `<input type="number" name="loading_${slotNumber}" value="${loadingVal}" min="0" style="width:70px;">` : loadingVal}</td>
+                        <td class="ingredient-capacity">${isIngredientsEditMode && ingredientIdForSave ? `<input type="number" name="capacity_${slotNumber}" value="${capacityVal}" min="0" style="width:70px;">` : capacityVal}</td></tr>`;
+        }
+        html += `</tbody></table><div class="form-footer">
+                    <button type="button" id="toggleIngredientsEditModeBtn" class="btn btn-info">${isIngredientsEditMode ? 'Отменить ред.' : 'Редактировать Остатки'}</button>
+                    <button type="button" id="saveMachineIngredientsBtn" class="btn btn-success" style="display: ${isIngredientsEditMode ? 'inline-block' : 'none'};">Сохранить Остатки</button>
+                 </div></div>`;
+        mainDisplayArea.innerHTML = html;
+        document.getElementById('toggleIngredientsEditModeBtn').onclick = toggleIngredientsEditModeHandler;
+        document.getElementById('saveMachineIngredientsBtn').onclick = saveMachineIngredientsHandlerFromView; 
+    }
+    
+    function toggleIngredientsEditModeHandler() { 
+        isIngredientsEditMode = !isIngredientsEditMode; 
+        renderMachineDataForViewUI(); 
+    }
+
+    async function saveMachineIngredientsHandlerFromView() {
+        const token = tokenInput.value.trim(); 
+        const machineId = currentSelectedMachineFullData.machine.id;
+        if (!token || !machineId) { showStatus("Нет токена или ID автомата.", "error"); return; }
+        const ingredientsPayload = { ingredients: [] }; 
+        let hasChanges = false;
+        const originalIngredients = currentSelectedMachineFullData.ingredients || [];
+
+        document.querySelectorAll("#machineDisplayTable tbody tr").forEach(tr => {
+            const slot = tr.dataset.slotNumber; 
+            const ingredientIdForSave = tr.dataset.ingredientIdForSave; 
+            const critical = parseInt(tr.dataset.criticalValue) || 0;
+
+            if (ingredientIdForSave) {
+                const loadingInput = tr.querySelector(`input[name="loading_${slot}"]`); 
+                const capacityInput = tr.querySelector(`input[name="capacity_${slot}"]`);
+                const originalIng = originalIngredients.find(ing => String(ing.ingredient_id) === String(ingredientIdForSave));
+                
+                if (loadingInput && capacityInput) { 
+                    const newLoading = parseInt(loadingInput.value, 10); 
+                    const newCapacity = parseInt(capacityInput.value, 10);
+                    
+                    if (isNaN(newLoading) || isNaN(newCapacity)) {
+                        showStatus(`Ошибка: некорректные значения для отсека ${slot}.`, "error", 0); 
+                        hasChanges = 'error'; 
+                        return;
+                    }
+                    if (originalIng && (newLoading !== originalIng.loading || newCapacity !== originalIng.capacity)) {
+                        hasChanges = true;
+                    } else if (!originalIng && (newLoading > 0 || newCapacity > 0)) { 
+                        hasChanges = true;
+                    }
+                    ingredientsPayload.ingredients.push({ ingredient_id: parseInt(ingredientIdForSave), loading: newLoading, capacity: newCapacity, critical: critical });
+                } else if (originalIng) { 
+                    ingredientsPayload.ingredients.push({ ingredient_id: parseInt(ingredientIdForSave), loading: originalIng.loading, capacity: originalIng.capacity, critical: critical }); 
+                }
+            }
+        });
+
+        if (hasChanges === 'error') return; 
+        
+        if (!hasChanges && ingredientsPayload.ingredients.length === originalIngredients.length) { 
+            showStatus("Нет изменений для сохранения.", "info"); 
+            return; 
+        }
+
+        if (ingredientsPayload.ingredients.length === 0 && originalIngredients.length > 0 && !confirm("Обнулить все остатки?")) return;
+        else if (ingredientsPayload.ingredients.length === 0 && originalIngredients.length === 0){ 
+            showStatus("Нет данных для сохранения.", "warning"); 
+            return; 
+        }
+
+        const saveButton = document.getElementById('saveMachineIngredientsBtn');
+        setLoadingState(true, saveButton, "Сохранение...");
+        try {
+            const result = await google.script.runWithPromiseWrapper('updateMachineIngredients', { machineId, token, ingredientsPayload });
+            if (result.success) { 
+                isIngredientsEditMode = false; 
+                loadAndDisplaySelectedMachineData("ingredients-saved"); 
+            } else { 
+                showStatus(`Ошибка сохранения: ${result.error || 'Неизвестно'}`, "error"); 
+                console.error("Ошибка updateMachineIngredients:", result); 
+            }
+        } catch (error) { 
+            showStatus(`Сбой сохранения: ${error.message || error}`, "error"); 
+        }
+        setLoadingState(false, saveButton);
+    }
+
+
+    function renderCreateEditMachineForm(editData = null) {
+        const isEditMode = !!editData; 
+        
+        if (currentFormMode !== 'cloneAndCreate') {
+            currentFormMode = isEditMode ? 'edit' : 'create';
+        }
+        
+        createdMachineIdForIngredients = (currentFormMode === 'edit' && editData) ? editData.machine.id : null;
+        isIngredientsEditMode = false; 
+
+        let formTitle = 'Создание Нового Автомата';
+        let showSaveChangesBtn = false;
+        let showCreateMachineBtn = true; 
+        let showSaveAsNewBtn = false;
+
+        if (currentFormMode === 'edit') {
+            formTitle = `Редактирование: ${editData.machine.name}`;
+            showSaveChangesBtn = true;
+            showCreateMachineBtn = false; 
+            showSaveAsNewBtn = true;
+        } else if (currentFormMode === 'cloneAndCreate') {
+            formTitle = `Клонирование (Создание нового на основе): ${editData.machine.name || 'N/A'}`;
+            showSaveChangesBtn = false;
+            showCreateMachineBtn = true;
+            showSaveAsNewBtn = false;
+        }
+
+        let html = `<div class="section-block" id="machineFormInstance"><h2 id="formTitleHeader">${formTitle}</h2>
+            <form id="genericMachineForm">
+                <input type="hidden" id="editingMachineId" value="${currentFormMode === 'edit' && editData ? editData.machine.id : ''}"> 
+                <input type="hidden" id="editingProductMatrixId" value="${editData && editData.productMatrix ? editData.productMatrix.id : ''}">
+                <input type="hidden" id="editingOldMachineAddress" value="${editData && editData.machine ? editData.machine.address : ''}">
+                <input type="hidden" id="currentTerminalPrimaryTidValue" value="${editData && editData.terminal && editData.terminal.tid ? editData.terminal.tid : ''}">
+                <input type="hidden" id="currentTerminalReserveTidIdValue" value="${editData && editData.terminal && editData.terminal.reserve_tid_id ? editData.terminal.reserve_tid_id : ''}">
+
+                <div class="form-section"><h3>1. Основные данные</h3><div class="form-grid">
+                    <div class="form-field">
+                        <label class="label" for="formMachineAddress">Адрес Автомата*:</label>
+                        <input type="text" id="formMachineAddress" required value="${editData ? (editData.machine.address || '') : ''}">
+                        <small>Имя товарной матрицы будет равно адресу.</small> <!-- Скрыто CSS -->
+                    </div>
+                    <div class="form-field">
+                        <label class="label" for="formMachineTerminalWrapper">Терминал*:</label>
+                        <div class="input-group">
+                            <input type="text" id="formMachineTerminalSearch" class="dropdown-input" placeholder="Поиск терминала..." autocomplete="off">
+                            <input type="hidden" id="formMachineTerminal" required value="${editData && editData.machine.terminal_id ? editData.machine.terminal_id : ''}">
+                            <button type="button" id="formMachineTerminalDropdownBtn" class="dropdown-btn" aria-expanded="false">▼</button>
+                            <div id="formMachineTerminalDropdownMenu" class="dropdown-menu"></div>
+                        </div>
+                        <small>Имя автомата будет = ID терминала (можно изменить вручную).</small> <!-- Скрыто CSS -->
+                    </div>
+                     <div class="form-field">
+                        <label class="label" for="formMachineName">Имя Автомата (ID)*:</label>
+                        <input type="text" id="formMachineName" value="${editData ? (editData.machine.name || '') : ''}" required>
+                    </div>
+                    <div class="form-field">
+                        <label class="label" for="formMachineModel">Модель*:</label>
+                        <select id="formMachineModel" required> <option value="">Загрузка...</option> </select>
+                    </div>
+                    <div class="form-field">
+                        <label class="label" for="primaryTidSearch">Основной TID:</label>
+                        <div class="input-group">
+                            <input type="text" id="primaryTidSearch" class="dropdown-input" placeholder="Поиск основного TID..." autocomplete="off">
+                            <input type="hidden" id="primaryTidId">
+                            <button type="button" id="primaryTidDropdownBtn" class="dropdown-btn" aria-expanded="false">▼</button>
+                            <div id="primaryTidDropdownMenu" class="dropdown-menu"></div>
+                        </div>
+                        <small>Выберите основной TID для терминала.</small> <!-- Скрыто CSS -->
+                    </div>
+                     <div class="form-field">
+                        <label class="label" for="reserveTidSearch">Резервный TID:</label>
+                        <div class="input-group">
+                            <input type="text" id="reserveTidSearch" class="dropdown-input" placeholder="Поиск резервного TID..." autocomplete="off">
+                            <input type="hidden" id="reserveTidId">
+                            <button type="button" id="reserveTidDropdownBtn" class="dropdown-btn" aria-expanded="false">▼</button>
+                            <div id="reserveTidDropdownMenu" class="dropdown-menu"></div>
+                        </div>
+                        <small>Выберите резервный TID для терминала.</small> <!-- Скрыто CSS -->
+                    </div>
+                    <div class="form-field">
+                        <label class="label" for="formMachineMicromarket">Микромаркет:</label>
+                        <select id="formMachineMicromarket">
+                            <option value="false" ${editData && !editData.machine.micromarket ? 'selected' : (!editData ? 'selected' : '')}>Нет</option>
+                            <option value="true" ${editData && editData.machine.micromarket ? 'selected' : ''}>Да</option>
+                        </select>
+                    </div>
+                </div></div>
+                <div class="form-section">
+                    <h3>2. Товары в Матрице (<span id="formMatrixNameDisplay">${editData && editData.machine ? (editData.machine.address || '') : 'Введите адрес'}</span>)</h3>
+                    <div style="margin-bottom: 10px; display:flex; gap:10px; flex-wrap:wrap;">
+                        <button type="button" id="formAddNewProductBtn" class="btn btn-sm btn-primary">Добавить Новый Товар</button>
+                        <button type="button" id="formAddExistingProductBtn" class="btn btn-sm btn-info">Выбрать Существующий</button>
+                        <button type="button" id="manageAllProductsBtn" class="btn btn-sm btn-secondary">Управление Всеми Товарами</button>
+                    </div>
+                    <table id="formMatrixProductsTable"><thead><tr><th>Наименование</th><th>ID</th><th>Отсек*</th><th>Остаток</th><th>Вместимость</th><th>Действия</th></tr></thead>
+                    <tbody id="formMatrixProductsTableBody"></tbody></table>
+                </div>
+                <div class="form-footer">
+                     <button type="submit" id="saveChangesMachineBtn" class="btn btn-success action-btn" style="display: ${showSaveChangesBtn ? 'inline-block' : 'none'};">Сохранить Изменения</button>
+                     <button type="submit" id="createMachineAndMatrixFromFormBtn" class="btn btn-success action-btn" style="display: ${showCreateMachineBtn ? 'inline-block' : 'none'};">Создать Автомат и Матрицу</button>
+                     <button type="button" id="saveAsNewMachineBtn" class="btn btn-info action-btn" style="display: ${showSaveAsNewBtn ? 'inline-block' : 'none'};">Сохранить как Новый</button>
+                     <button type="button" id="formSaveIngredientsBtn" class="btn btn-primary action-btn" style="display:none;">Сохранить Остатки/Вместимость</button>
+                     <button type="button" id="cancelMachineFormBtn" class="btn btn-secondary action-btn">Отмена</button>
+                </div>
+            </form></div>`;
+        mainDisplayArea.innerHTML = html;
+
+        document.getElementById('formMachineAddress').oninput = (e) => { document.getElementById('formMatrixNameDisplay').textContent = e.target.value || 'Введите адрес'; };
+        document.getElementById('formAddNewProductBtn').onclick = () => { newProductNameModalInput.value = ''; openModal(addNewProductModal); newProductNameModalInput.focus(); };
+        document.getElementById('formAddExistingProductBtn').onclick = () => { openModal(selectExistingProductModal); loadAndRenderExistingProductsForSelection('formMatrixProductsTableBody'); };
+        document.getElementById('manageAllProductsBtn').onclick = showAllProductsManagementUI; 
+        document.getElementById('cancelMachineFormBtn').onclick = () => { 
+            mainDisplayArea.innerHTML = '<p style="text-align:center; color: var(--secondary-color);">Действие отменено.</p>';
+            currentFormMode = 'view'; 
+            if(machineSelectDropdownInput.dataset.selectedMachineId) loadAndDisplaySelectedMachineData();
+            else mainDisplayArea.innerHTML += '<p style="text-align:center; color: var(--secondary-color);">Выберите автомат для просмотра или создайте новый.</p>';
+        };
+        
+        const saveChangesMachineBtn = document.getElementById('saveChangesMachineBtn');
+        if (saveChangesMachineBtn) {
+            saveChangesMachineBtn.onclick = (e) => handleSaveMachineForm(e, 'update'); 
+        }
+
+        const createMachineAndMatrixFromFormBtn = document.getElementById('createMachineAndMatrixFromFormBtn');
+        if (createMachineAndMatrixFromFormBtn) {
+            createMachineAndMatrixFromFormBtn.onclick = (e) => handleSaveMachineForm(e, 'create'); 
+        }
+
+        const saveAsNewMachineBtn = document.getElementById('saveAsNewMachineBtn');
+        if(saveAsNewMachineBtn) saveAsNewMachineBtn.onclick = handleSaveAsNewMachine;
+
+        setupTidDropdown('primaryTidSearch', 'primaryTidId', 'primaryTidDropdownMenu', 'primaryTidDropdownBtn', 'primary');
+        setupTidDropdown('reserveTidSearch', 'reserveTidId', 'reserveTidDropdownMenu', 'reserveTidDropdownBtn', 'reserve');
+        
+        const terminalSearchInput = document.getElementById('formMachineTerminalSearch');
+        const terminalDropdown = document.getElementById('formMachineTerminalDropdownMenu');
+        const terminalDropdownBtn = document.getElementById('formMachineTerminalDropdownBtn');
+        if(terminalSearchInput && terminalDropdown && terminalDropdownBtn){
+            terminalSearchInput.oninput = (e) => populateFormTerminalDropdown(e.target.value.trim());
+            terminalSearchInput.onfocus = () => { populateFormTerminalDropdown(terminalSearchInput.value.trim()); terminalDropdown.style.display = 'block';};
+            terminalDropdownBtn.onclick = () => toggleDropdown(terminalDropdown, terminalSearchInput); 
+            document.addEventListener('click', (event) => { 
+                if (!terminalDropdown.contains(event.target) && event.target !== terminalSearchInput && event.target !== terminalDropdownBtn) {
+                    hideDropdown(terminalDropdown, terminalSearchInput);
+                }
+            });
+        }
+        
+        const formSaveIngredientsBtn = document.getElementById('formSaveIngredientsBtn');
+        if(createdMachineIdForIngredients || (currentFormMode === 'edit' && editData && editData.machine && editData.machine.id) ){ 
+             formSaveIngredientsBtn.style.display = 'inline-block';
+             formSaveIngredientsBtn.onclick = () => {
+                 const productsData = [];
+                 document.getElementById('formMatrixProductsTableBody').querySelectorAll('tr').forEach(row => {
+                     const productId = row.dataset.productId;
+                     const pName = row.cells[0].textContent; 
+                     const loadingInput = row.cells[3].querySelector('input[type="number"]');
+                     const capacityInput = row.cells[4].querySelector('input[type="number"]');
+                     productsData.push({
+                         product_id: parseInt(productId),
+                         product_name: pName,
+                         loading: loadingInput ? parseInt(loadingInput.value) : 0,
+                         capacity: capacityInput ? parseInt(capacityInput.value) : 0
+                     });
+                 });
+                 handleSaveIngredientsForGenericForm(createdMachineIdForIngredients || document.getElementById('editingMachineId').value, productsData, true); 
+             };
+        }
+
+        loadDataForGenericMachineForm(editData);
+    }
+    
+    function updateMachineNameFromTerminalOnForm() {
+        const terminalHiddenInput = document.getElementById('formMachineTerminal');
+        const machineNameInput = document.getElementById('formMachineName');
+        if (terminalHiddenInput && terminalHiddenInput.value && machineNameInput) {
+            machineNameInput.value = terminalHiddenInput.value; 
+        } else if (machineNameInput) {
+            machineNameInput.value = '';
+        }
+    }
+
+    async function loadDataForGenericMachineForm(editData = null) {
+        const token = tokenInput.value.trim(); 
+        if (!token) { showStatus("Нужен токен API.", "error"); return; }
+
+        const formTerminalSearchInput = document.getElementById('formMachineTerminalSearch');
+        const formTerminalHiddenInput = document.getElementById('formMachineTerminal');
+        const formModelSelect = document.getElementById('formMachineModel');
+        const formMachineNameInput = document.getElementById('formMachineName');
+        
+        setLoadingState(true, null, "Загрузка данных формы...");
+        try {
+            const isCloning = currentFormMode === 'cloneAndCreate';
+            const [terminalsResult, modelsResult, allTidsResult, availableTidsResult] = await Promise.all([
+                google.script.runWithPromiseWrapper('getTerminals', { token, ItemsOnPage: 2000 }), 
+                google.script.runWithPromiseWrapper('getMachineModels', { token, ItemsOnPage: 1000 }),
+                google.script.runWithPromiseWrapper('getAvailableTIDs', { token, ItemsOnPage: 1000 }), 
+                google.script.runWithPromiseWrapper('getAvailableTIDs', { token, ItemsOnPage: 1000, NotUsedAsPrimary: true, NotUsedAsReserve: true }) 
+            ]);
+
+            allTerminalsCache = (terminalsResult && terminalsResult.success && Array.isArray(terminalsResult.items)) ? terminalsResult.items : [];
+            allTidsCacheMasterList = (allTidsResult && allTidsResult.success && Array.isArray(allTidsResult.items)) ? allTidsResult.items : [];
+            availableTidsList = (availableTidsResult && availableTidsResult.success && Array.isArray(availableTidsResult.items)) ? availableTidsResult.items : [];
+            
+            populateFormTerminalDropdown(''); 
+            populateTidDropdown('primaryTidSearch', 'primaryTidId', 'primaryTidDropdownMenu', 'primary');
+            populateTidDropdown('reserveTidSearch', 'reserveTidId', 'reserveTidDropdownMenu', 'reserve');
+
+
+            if (editData && editData.machine.terminal_id) {
+                const selectedTerminal = allTerminalsCache.find(t => t.id === editData.machine.terminal_id);
+                if (selectedTerminal && formTerminalSearchInput) {
+                    formTerminalSearchInput.value = `ID: ${selectedTerminal.id} (Комментарий: ${selectedTerminal.comment || 'N/A'})`;
+                    formTerminalHiddenInput.value = selectedTerminal.id;
+                }
+                if (editData.terminal) { 
+                    document.getElementById('currentTerminalPrimaryTidValue').value = editData.terminal.tid || '';
+                    document.getElementById('currentTerminalReserveTidIdValue').value = editData.terminal.reserve_tid_id || '';
+
+                    if(editData.terminal.tid) { 
+                        const primaryTidObj = allTidsCacheMasterList.find(t => t.tid === editData.terminal.tid);
+                        if (primaryTidObj) {
+                            document.getElementById('primaryTidSearch').value = `${primaryTidObj.tid} | ${primaryTidObj.bank_name || 'N/A'} (ID: ${primaryTidObj.id})`;
+                            document.getElementById('primaryTidId').value = primaryTidObj.id;
+                        }
+                    }
+                    if(editData.terminal.reserve_tid_id) { 
+                         const reserveTidObj = allTidsCacheMasterList.find(t => t.id === editData.terminal.reserve_tid_id);
+                         if (reserveTidObj) {
+                            document.getElementById('reserveTidSearch').value = `${reserveTidObj.tid} | ${reserveTidObj.bank_name || 'N/A'} (ID: ${reserveTidObj.id})`;
+                            document.getElementById('reserveTidId').value = reserveTidObj.id;
+                        }
+                    }
+                }
+            } else if (isCloning) { 
+                 if(formTerminalSearchInput) formTerminalSearchInput.value = '';
+                 formTerminalHiddenInput.value = '';
+                 if(formMachineNameInput) formMachineNameInput.value = '';
+                 document.getElementById('primaryTidSearch').value = '';
+                 document.getElementById('primaryTidId').value = '';
+                 document.getElementById('reserveTidSearch').value = '';
+                 document.getElementById('reserveTidId').value = '';
+            }
+
+            allMachineModelsCache = (modelsResult && modelsResult.success && Array.isArray(modelsResult.items)) ? modelsResult.items : [];
+            formModelSelect.innerHTML = '<option value="">Выберите модель</option>';
+            allMachineModelsCache.forEach(m => {
+                const o = document.createElement('option'); o.value = m.id;
+                o.textContent = `${m.name || `Модель ID:${m.id}`}`;
+                if (editData && editData.machine.model_id === m.id) {
+                    o.selected = true;
+                } else if (!editData && m.id === DEFAULT_MACHINE_MODEL_ID) { 
+                    o.selected = true; 
+                }
+                formModelSelect.appendChild(o);
+            });
+            
+            if (editData && editData.productMatrix && Array.isArray(editData.productMatrix.products)) {
+                const tableBody = document.getElementById('formMatrixProductsTableBody');
+                tableBody.innerHTML = '';
+                for (const pInMatrix of editData.productMatrix.products) {
+                    let loading = '', capacity = '';
+                    if(editData.ingredients && Array.isArray(editData.ingredients)){
+                        const ingData = editData.ingredients.find(ing => ing.ingredient_name && pInMatrix.product_name && ing.ingredient_name.trim().toLowerCase() === pInMatrix.product_name.trim().toLowerCase());
+                        if(ingData) { loading = ingData.loading ?? ''; capacity = ingData.capacity ?? ''; }
+                    }
+                    addProductToTable(tableBody, pInMatrix.product_id, pInMatrix.product_name, pInMatrix.item_id, loading, capacity);
+                }
+            }
+            
+            if (currentFormMode === 'create' || (currentFormMode === 'cloneAndCreate' && !formMachineNameInput.value)) { 
+                updateMachineNameFromTerminalOnForm();
+            }
+
+            if (!editData) { 
+                const microMarketSelect = document.getElementById('formMachineMicromarket');
+                if (microMarketSelect) microMarketSelect.value = "false"; 
+            }
+
+        } catch (error) { showStatus(`Сбой загрузки данных формы: ${error.message || error}`, "error"); }
+        setLoadingState(false);
+    }
+
+    function populateFormTerminalDropdown(filterText = "") {
+        const menu = document.getElementById('formMachineTerminalDropdownMenu');
+        const searchInput = document.getElementById('formMachineTerminalSearch');
+        const hiddenInput = document.getElementById('formMachineTerminal');
+        const machineNameInput = document.getElementById('formMachineName');
+        menu.innerHTML = "";
+
+        const filtered = allTerminalsCache.filter(t => 
+            (t.id && String(t.id).includes(filterText)) || 
+            (t.tid && String(t.tid).toLowerCase().includes(filterText.toLowerCase())) || 
+            (t.comment && t.comment.toLowerCase().includes(filterText.toLowerCase())) 
+        );
+
+        if (filtered.length === 0) { 
+            menu.insertAdjacentHTML('beforeend', `<div class="dropdown-item no-results">Терминалы не найдены.</div>`); 
+        } else {
+            filtered.forEach(t => {
+                const itemText = `ID: ${t.id} (Комментарий: ${t.comment || 'N/A'})`;
+                const div = Object.assign(document.createElement('div'), { className: 'dropdown-item', textContent: itemText });
+                div.onclick = () => {
+                    searchInput.value = itemText;
+                    hiddenInput.value = t.id;
+                    machineNameInput.value = t.id; 
+                    hideDropdown(menu, searchInput);
+                    document.getElementById('primaryTidSearch').value = ''; document.getElementById('primaryTidId').value = '';
+                    document.getElementById('reserveTidSearch').value = ''; document.getElementById('reserveTidId').value = '';
+                    document.getElementById('currentTerminalPrimaryTidValue').value = t.tid || '';
+                    document.getElementById('currentTerminalReserveTidIdValue').value = t.reserve_tid_id || '';
+                    populateTidDropdown('primaryTidSearch', 'primaryTidId', 'primaryTidDropdownMenu', 'primary');
+                    populateTidDropdown('reserveTidSearch', 'reserveTidId', 'reserveTidDropdownMenu', 'reserve');
+                };
+                menu.appendChild(div);
+            });
+        }
+    }
+
+    function setupTidDropdown(searchInputId, hiddenInputId, menuId, dropdownBtnId, tidType) {
+        const searchInput = document.getElementById(searchInputId);
+        const menu = document.getElementById(menuId);
+        const dropdownBtn = document.getElementById(dropdownBtnId);
+
+        if (searchInput && menu && dropdownBtn) {
+            searchInput.oninput = (e) => populateTidDropdown(searchInputId, hiddenInputId, menuId, tidType, e.target.value.trim());
+            searchInput.onfocus = () => { populateTidDropdown(searchInputId, hiddenInputId, menuId, tidType, searchInput.value.trim()); menu.style.display = 'block'; };
+            dropdownBtn.onclick = () => toggleDropdown(menu, searchInput);
+            document.addEventListener('click', (event) => {
+                if (!menu.contains(event.target) && event.target !== searchInput && event.target !== dropdownBtn) {
+                    hideDropdown(menu, searchInput);
+                }
+            });
+        }
+    }
+
+    function populateTidDropdown(searchInputId, hiddenInputId, menuId, tidType, filterText = "") {
+        const menu = document.getElementById(menuId);
+        const searchInput = document.getElementById(searchInputId);
+        const hiddenInput = document.getElementById(hiddenInputId);
+        menu.innerHTML = "";
+
+        const currentTerminalId = parseInt(document.getElementById('formMachineTerminal').value || '0', 10);
+        const currentPrimaryTidString = document.getElementById('currentTerminalPrimaryTidValue').value;
+        const currentReserveTidIdNum = parseInt(document.getElementById('currentTerminalReserveTidIdValue').value || '0');
+
+        let tidsToConsider = [...availableTidsList]; 
+
+        if (currentTerminalId > 0) {
+            if (tidType === 'primary' && currentPrimaryTidString) {
+                const currentPrimaryTidObj = allTidsCacheMasterList.find(t => t.tid === currentPrimaryTidString);
+                if (currentPrimaryTidObj && !tidsToConsider.some(tid => tid.id === currentPrimaryTidObj.id)) {
+                    tidsToConsider.push(currentPrimaryTidObj);
+                }
+            } else if (tidType === 'reserve' && currentReserveTidIdNum > 0) {
+                const currentReserveTidObj = allTidsCacheMasterList.find(t => t.id === currentReserveTidIdNum);
+                if (currentReserveTidObj && !tidsToConsider.some(tid => tid.id === currentReserveTidObj.id)) {
+                    tidsToConsider.push(currentReserveTidObj);
+                }
+            }
+        }
+        
+        const selectedOtherTidId = (tidType === 'primary') 
+            ? parseInt(document.getElementById('reserveTidId').value || '0', 10) 
+            : parseInt(document.getElementById('primaryTidId').value || '0', 10);
+
+        const filteredTids = tidsToConsider.filter(tid => {
+            const textMatch = (tid.tid && tid.tid.toLowerCase().includes(filterText.toLowerCase())) ||
+                              (tid.bank_name && tid.bank_name.toLowerCase().includes(filterText.toLowerCase()));
+            
+            return textMatch && (tid.id !== selectedOtherTidId || selectedOtherTidId === 0);
+        });
+        
+        const clearDiv = Object.assign(document.createElement('div'), { className: 'dropdown-item clear-selection', textContent: '--- Нет (Очистить) ---' });
+        clearDiv.onclick = () => {
+            searchInput.value = '';
+            hiddenInput.value = '';
+            hideDropdown(menu, searchInput);
+        };
+        menu.appendChild(clearDiv);
+
+        if (filteredTids.length === 0) {
+            menu.insertAdjacentHTML('beforeend', `<div class="dropdown-item no-results">Свободные TID не найдены.</div>`);
+        } else {
+            filteredTids.forEach(tid => {
+                const itemText = `${tid.tid} | ${tid.bank_name || 'N/A'} (ID: ${tid.id})`;
+                const div = Object.assign(document.createElement('div'), { className: 'dropdown-item', textContent: itemText });
+                div.onclick = () => {
+                    searchInput.value = itemText;
+                    hiddenInput.value = tid.id; 
+                    hideDropdown(menu, searchInput);
+                };
+                menu.appendChild(div);
+            });
+        }
+    }
+    
+    
+    async function handleSaveMachineForm(event, operationType) { 
+        event.preventDefault(); 
+
+        const token = tokenInput.value.trim(); 
+        if (!token) { showStatus("Токен API не найден.", "error"); return; }
+        
+        const isActualEditMode = (operationType === 'update'); 
+        
+        const machineIdForUpdate = document.getElementById('editingMachineId').value;
+        let productMatrixIdForUpdate = document.getElementById('editingProductMatrixId').value;
+        const oldAddressFromHidden = document.getElementById('editingOldMachineAddress').value;
+
+        const address = document.getElementById('formMachineAddress').value.trim();
+        const terminalId = parseInt(document.getElementById('formMachineTerminal').value || '0', 10); 
+        const machineName = document.getElementById('formMachineName').value.trim(); 
+        const modelId = parseInt(document.getElementById('formMachineModel').value || '0', 10);
+        const isMicromarket = document.getElementById('formMachineMicromarket').value === 'true';
+
+        const primaryTidId = document.getElementById('primaryTidId').value; 
+        const reserveTidId = document.getElementById('reserveTidId').value; 
+        const primaryTidString = primaryTidId ? (allTidsCacheMasterList.find(t => t.id == primaryTidId)?.tid || "") : "";
+
+
+        if (!address || !terminalId || !modelId || !machineName) { 
+            showStatus("Заполните Адрес, Терминал, Имя Автомата, Модель. Проверьте также, что имя автомата не пустое.", "error"); 
+            return; 
+        }
+        
+        const newMatrixName = address;
+        const productAssignmentsForMatrix = [];
+        const currentMachineProductDataForIngredients = []; 
+        let slotsValid = true; 
+        const slotSet = new Set();
+        document.getElementById('formMatrixProductsTableBody').querySelectorAll('tr').forEach(row => {
+            const productId = row.dataset.productId;
+            const slotInput = row.cells[2].querySelector('input[type="number"]');
+            const loadingInput = row.cells[3].querySelector('input[type="number"]');
+            const capacityInput = row.cells[4].querySelector('input[type="number"]');
+            const slotNumber = slotInput ? parseInt(slotInput.value) : null;
+            const pName = row.cells[0].textContent; 
+
+            if (!productId || !slotNumber || slotNumber < 1) { 
+                slotsValid = false; 
+                slotInput.style.borderColor = 'red'; 
+                showStatus(`Ошибка: Отсек для товара "${pName}" (ID: ${productId}) должен быть числом > 0.`, "error", 0, true);
+            }
+            else if (slotSet.has(slotNumber)) { 
+                slotsValid = false; 
+                slotInput.style.borderColor = 'red'; 
+                showStatus(`Ошибка: Дублирующийся номер отсека: ${slotNumber} для товара "${pName}".`, "error", 0, true);
+            }
+            else { 
+                slotSet.add(slotNumber); 
+                productAssignmentsForMatrix.push({ product_id: parseInt(productId), item_id: slotNumber, product_name: pName }); 
+                slotInput.style.borderColor = ''; 
+                currentMachineProductDataForIngredients.push({
+                    product_id: parseInt(productId), 
+                    product_name: pName, 
+                    loading: loadingInput ? parseInt(loadingInput.value) : 0, 
+                    capacity: capacityInput ? parseInt(capacityInput.value) : 0
+                });
+            }
+        });
+        if (!slotsValid) { 
+            showStatus("Исправьте ошибки в номерах отсеков. Все ошибки показаны на форме.", "error", 10000); 
+            return; 
+        }
+
+        setLoadingState(true, event.target, "Сохранение...");
+        createdMachineIdForIngredients = null; 
+
+        try {
+            let finalProductMatrixId;
+            let oldMatrixIdToDelete = null;
+
+            let shouldHandleMatrix = false;
+            if (operationType === 'create' || (operationType === 'update' && (newMatrixName !== oldAddressFromHidden || !productMatrixIdForUpdate))) {
+                shouldHandleMatrix = true;
+            }
+
+            if (shouldHandleMatrix) {
+                showStatus("Поиск/создание товарной матрицы...", "info", 0);
+                const matrixResult = await google.script.runWithPromiseWrapper('getOrCreateProductMatrixByName', { token, matrixName: newMatrixName });
+                
+                if (!matrixResult.success || !matrixResult.matrix || typeof matrixResult.matrix.id !== 'number' || matrixResult.matrix.id <= 0) {
+                    const errorDetails = matrixResult.error || (matrixResult.details ? JSON.stringify(matrixResult.details) : 'нет item.id или оно некорректно');
+                    throw new Error(`Ошибка работы с матрицей: ${errorDetails}`);
+                }
+                finalProductMatrixId = matrixResult.matrix.id;
+                showStatus(`Матрица ID ${finalProductMatrixId} (${matrixResult.existed ? 'найдена' : 'создана'}). Обновление состава...`, "info", 0);
+                
+                if(operationType === 'update' && newMatrixName !== oldAddressFromHidden && productMatrixIdForUpdate && productMatrixIdForUpdate !== String(finalProductMatrixId)){ 
+                    oldMatrixIdToDelete = productMatrixIdForUpdate; 
+                }
+            } else { 
+                finalProductMatrixId = parseInt(productMatrixIdForUpdate); 
+            }
+            
+            showStatus("Обновление товарной матрицы...", "info", 0);
+            const updateMatrixPayload = { token, id: parseInt(finalProductMatrixId), name: newMatrixName, products: productAssignmentsForMatrix, micromarket: isMicromarket, offset: 0 };
+            
+            if (typeof updateMatrixPayload.id !== 'number' || updateMatrixPayload.id <= 0) {
+                throw new Error(`Внутренняя ошибка: ID товарной матрицы (${updateMatrixPayload.id}) недействителен перед обновлением.`);
+            }
+
+            console.log("DEBUG: updateMatrixPayload for matrix update:", JSON.stringify(updateMatrixPayload)); 
+            const updateMatrixResult = await google.script.runWithPromiseWrapper('updateProductMatrix', updateMatrixPayload);
+            if (!updateMatrixResult.success) throw new Error(`Ошибка обновления матрицы: ${updateMatrixResult.error || JSON.stringify(updateMatrixResult.details) ||'ошибка'}`);
+            showStatus("Матрица обновлена. Сохранение автомата...", "info", 0);
+
+            const baseMachinePayload = { 
+                token,
+                name: machineName, 
+                model_id: modelId, 
+                address, 
+                terminal_id: terminalId, 
+                product_matrix_id: parseInt(finalProductMatrixId), 
+                micromarket: isMicromarket 
+            };
+            
+            let machineOpResult;
+            if (operationType === 'update') { 
+                const machinePayloadForUpdate = { ...baseMachinePayload, id: parseInt(machineIdForUpdate) };
+                console.log("DEBUG: Calling updateMachine with payload:", JSON.stringify(machinePayloadForUpdate)); 
+                machineOpResult = await google.script.runWithPromiseWrapper('updateMachine', machinePayloadForUpdate);
+            } else { 
+                const machinePayloadForAdd = { ...baseMachinePayload };
+                delete machinePayloadForAdd.id; 
+                console.log("DEBUG: Calling addMachine with payload:", JSON.stringify(machinePayloadForAdd)); 
+                machineOpResult = await google.script.runWithPromiseWrapper('addMachine', machinePayloadForAdd);
+            }
+            console.log("DEBUG: Result from machine operation:", JSON.stringify(machineOpResult));
+
+            if (!machineOpResult.success || !machineOpResult.item || !machineOpResult.item.id) {
+                const apiErrorDetails = machineOpResult.details ? JSON.stringify(machineOpResult.details) : 'нет деталей';
+                throw new Error(`Ошибка сохранения автомата: ${machineOpResult.error || 'Неизвестная ошибка API'}. Детали: ${apiErrorDetails}`);
+            }
+            
+            createdMachineIdForIngredients = machineOpResult.item.id;
+            const currentTerminalIdForTidUpdate = machineOpResult.item.terminal_id; 
+
+            if (currentTerminalIdForTidUpdate) {
+                showStatus("Обновление привязки TID к терминалу...", "info", 0, true);
+                const terminalDetailsResult = await google.script.runWithPromiseWrapper('getTerminalById', {token, id: currentTerminalIdForTidUpdate});
+                if(terminalDetailsResult.success && terminalDetailsResult.item){
+                    const terminalUpdatePayload = { ...terminalDetailsResult.item }; 
+                    delete terminalUpdatePayload.id; 
+                    delete terminalUpdatePayload.success;
+                    delete terminalUpdatePayload.error; 
+                    const fieldsToRemoveFromTerminalPayload = ["serial_number", "version", "gsm_operator", "gsm_rssi", "imei", "partner_id", "partner_name", "main_owner_id", "external_server_id", "last_online_time", "last24_hours_online", "last_hour_online", "sber_qrid", "auto_cancel_timeout", "bonus_percent", "bonus_transactions", "qr_discount_percent", "type", "sim_balance", "sim_number", "sim_text", "paid_sim", "division_id", "division_name", "bootloader_version", "success_message", "success_message_timeout", "machine_id", "ping", "disable_firmware_updates", "kassa_id", "generate_eva_dts_report", "min_pay_server", "owner_name", "longitude", "latitude", "color", "sum", "state"]; 
+                    fieldsToRemoveFromTerminalPayload.forEach(field => delete terminalUpdatePayload[field]);
+                    
+                    terminalUpdatePayload.tid = primaryTidString || ""; 
+                    terminalUpdatePayload.processing_id = primaryTidString ? DEFAULT_PROCESSING_ID : (terminalDetailsResult.item.processing_id || 0); 
+                    terminalUpdatePayload.reserve_tid_id = reserveTidId ? parseInt(reserveTidId) : 0; 
+                    terminalUpdatePayload.comment = address; 
+                    
+                    terminalUpdatePayload.send_cash = true;
+                    terminalUpdatePayload.send_cashless = true;
+
+                    console.log("DEBUG: Calling updateTerminal with payload:", JSON.stringify(terminalUpdatePayload));
+                    const termUpdateRes = await google.script.runWithPromiseWrapper('updateTerminal', {token, id: currentTerminalIdForTidUpdate, payload: terminalUpdatePayload });
+                    if(termUpdateRes.success) {
+                        showStatus("Привязка TID к терминалу обновлена.", "info", 5000, true);
+                        document.getElementById('currentTerminalPrimaryTidValue').value = primaryTidString || '';
+                        document.getElementById('currentTerminalReserveTidIdValue').value = reserveTidId || '';
+                    } else {
+                        showStatus(`Ошибка обновления терминала для TID: ${termUpdateRes.error || JSON.stringify(termUpdateRes.details)}`, "warning", 8000, true);
+                    }
+
+                    if(primaryTidId){
+                        await google.script.runWithPromiseWrapper('updateTID', {token, id: primaryTidId, payload: { comment: address }});
+                    }
+                    if(reserveTidId && reserveTidId !== primaryTidId){ 
+                        await google.script.runWithPromiseWrapper('updateTID', {token, id: reserveTidId, payload: { comment: address }});
+                    }
+
+                } else {
+                     showStatus(`Не удалось получить детали терминала ${currentTerminalIdForTidUpdate} для обновления TID.`, "warning", 8000, true);
+                }
+            }
+            
+            const opTypeFinal = (operationType === 'update') ? 'обновлен' : 'создан';
+            let successMsgFinal = `Автомат "${machineOpResult.item.name}" (ID: ${createdMachineIdForIngredients || machineOpResult.item.id}) ${opTypeFinal}.`;
+            
+            if ((operationType === 'create' || currentFormMode === 'cloneAndCreate') && currentMachineProductDataForIngredients.length > 0) {
+                showStatus(successMsgFinal + " Сохранение остатков...", "info", 0, true);
+                await handleSaveIngredientsForGenericForm(createdMachineIdForIngredients || machineOpResult.item.id, currentMachineProductDataForIngredients, false); 
+                successMsgFinal += " Остатки сохранены.";
+            } else if (operationType === 'update') {
+                successMsgFinal += " Для сохранения остатков нажмите соответствующую кнопку.";
+            }
+            showStatus(successMsgFinal, "success", 10000);
+            
+            document.getElementById('editingMachineId').value = createdMachineIdForIngredients || machineOpResult.item.id; 
+            document.getElementById('editingProductMatrixId').value = finalProductMatrixId;
+            document.getElementById('editingOldMachineAddress').value = address; 
+
+            const formSaveIngredientsBtn = document.getElementById('formSaveIngredientsBtn');
+            formSaveIngredientsBtn.style.display = 'inline-block';
+            formSaveIngredientsBtn.onclick = () => handleSaveIngredientsForGenericForm(createdMachineIdForIngredients || machineOpResult.item.id, currentMachineProductDataForIngredients, true); 
+
+            if (oldMatrixIdToDelete) {
+                showStatus(`Удаление старой матрицы ID: ${oldMatrixIdToDelete}...`, "info", 0);
+                const deleteOldMatrixResult = await google.script.runWithPromiseWrapper('deleteProductMatrix', {token, id: parseInt(oldMatrixIdToDelete)}); 
+                if(deleteOldMatrixResult.success) showStatus(`Старая матрица ID ${oldMatrixIdToDelete} успешно удалена.`, "info", 5000);
+                else showStatus(`Ошибка удаления старой матрицы ID ${oldMatrixIdToDelete}: ${deleteOldMatrixResult.error || 'Неизвестно'}`, "warning", 8000);
+            }
+
+            await loadAllMachinesForDropdown(); 
+            
+            const freshMachineDetails = await google.script.runWithPromiseWrapper('getMachineDetailsForView', { token, machineId: createdMachineIdForIngredients || machineOpResult.item.id });
+            if(freshMachineDetails.success) currentSelectedMachineFullData = freshMachineDetails;
+
+            if (currentFormMode === 'cloneAndCreate' || currentFormMode === 'create') {
+                currentFormMode = 'edit'; 
+                renderCreateEditMachineForm(currentSelectedMachineFullData); 
+            } else if (currentFormMode === 'edit') { 
+                renderCreateEditMachineForm(currentSelectedMachineFullData); 
+            }
+
+        } catch (error) { 
+            showStatus(`Ошибка сохранения: ${error.message || error}`, "error"); 
+            console.error("Полная ошибка сохранения:", error); 
+        }
+        setLoadingState(false, event.target);
+    }
+    
+    async function handleSaveIngredientsForGenericForm(machineId, productDataFromForm, showSuccessMessage = true) {
+        const token = tokenInput.value.trim();
+        if (!token || !machineId) { 
+            if (showSuccessMessage) showStatus("Нет токена или ID автомата для сохранения остатков.", "error");
+            return; 
+        }
+        if (productDataFromForm.length === 0) {
+            if (showSuccessMessage) showStatus("Нет товаров в матрице для сохранения остатков/вместимости.", "info");
+            return;
+        }
+
+        const ingredientsPayload = { ingredients: [] };
+        const formSaveBtn = document.getElementById('formSaveIngredientsBtn'); 
+        if(formSaveBtn) setLoadingState(true, formSaveBtn, "Загрузка системных ингредиентов...");
+
+        let systemIngredients = []; 
+        const allIngredsResult = await google.script.runWithPromiseWrapper('getIngredients', {token, ItemsOnPage: 2000, ShowProducts: true });
+        if(allIngredsResult.success && allIngredsResult.items) {
+            systemIngredients = allIngredsResult.items;
+        } else { 
+            if (showSuccessMessage) showStatus("Не удалось загрузить системные ингредиенты для сопоставления остатков.", "warning"); 
+            if(formSaveBtn) setLoadingState(false, formSaveBtn); 
+            return;
+        }
+        
+        if(formSaveBtn) setLoadingState(true, formSaveBtn, "Формирование данных остатков...");
+        for (const item of productDataFromForm) {
+            const systemIngMatch = systemIngredients.find(si => 
+                (si.item_id && si.item_id === item.product_id) || 
+                (si.name && si.name.trim().toLowerCase() === item.product_name.trim().toLowerCase()) 
+            ); 
+            if (systemIngMatch && systemIngMatch.id) {
+                ingredientsPayload.ingredients.push({ ingredient_id: parseInt(systemIngMatch.id), loading: item.loading, capacity: item.capacity, critical: 0 });
+            } else {
+                 if (showSuccessMessage) showStatus(`Предупреждение: Не найден системный ingredient_id для товара "${item.product_name}" (Product ID: ${item.product_id}). Его остатки не будут сохранены.`, "warning", 10000, true);
+            }
+        }
+
+        if (ingredientsPayload.ingredients.length === 0 && productDataFromForm.length > 0) {
+            if (showSuccessMessage) showStatus("Не удалось сопоставить ни один товар для сохранения остатков. Проверьте имена товаров/ингредиентов.", "warning"); 
+            if(formSaveBtn) setLoadingState(false, formSaveBtn); 
+            return;
+        }
+        
+        if(formSaveBtn) setLoadingState(true, formSaveBtn, "Сохранение остатков...");
+        try {
+            const result = await google.script.runWithPromiseWrapper('updateMachineIngredients', { machineId, token, ingredientsPayload });
+            if (result.success) {
+                if (showSuccessMessage) showStatus("Остатки/вместимость успешно сохранены для автомата ID " + machineId + ".", "success");
+                if (machineSelectDropdownInput.dataset.selectedMachineId === String(machineId)) { 
+                    const details = await google.script.runWithPromiseWrapper('getMachineDetailsForView', { token, machineId });
+                    if(details.success) currentSelectedMachineFullData = details;
+                }
+            } else {
+                if (showSuccessMessage) showStatus(`Ошибка сохранения остатков: ${result.error || JSON.stringify(result.details) || 'Неизвестно'}`, "error", 10000);
+                console.error("Ошибка updateMachineIngredients:", result);
+            }
+        } catch (error) { if (showSuccessMessage) showStatus(`Сбой сохранения остатков: ${error.message || error}`, "error"); }
+        if(formSaveBtn) setLoadingState(false, formSaveBtn);
+    }
+
+    function loadAndRenderExistingProductsForSelection(targetTableId) {
+        const token = tokenInput.value.trim(); 
+        if (!token) { showStatus("Токен API не найден.", "error"); closeModal(selectExistingProductModal); return; }
+        existingProductListContainer.innerHTML = "<p>Загрузка...</p>"; 
+        existingProductSearchInput.value = "";
+        
+        setLoadingState(true, null, "Загрузка товаров...");
+        (async () => {
+          try {
+            const result = await google.script.runWithPromiseWrapper('getProducts', { token, ItemsOnPage: 2000 });
+            setLoadingState(false);
+            if (result && result.success && Array.isArray(result.items)) {
+                allProductsCache = result.items; 
+                renderExistingProductsForSelectionUI(allProductsCache, targetTableId);
+            } else { 
+                existingProductListContainer.innerHTML = `<p style="color:red;">Ошибка: ${result.error || 'Нет данных'}</p>`; 
+                showStatus(`Не удалось загрузить список товаров: ${result.error || 'Нет данных'}`, "error");
+                return; 
+            }
+          } catch (error) { 
+              setLoadingState(false);
+              existingProductListContainer.innerHTML = `<p style="color:red;">Сбой: ${error.message || error}</p>`;
+              showStatus(`Сбой загрузки товаров: ${error.message || error}`, "error");
+            }
+        })();
+    }
+
+    function renderExistingProductsForSelectionUI(products, targetTableId) {
+        existingProductListContainer.innerHTML = ''; 
+        if (products.length === 0) { existingProductListContainer.innerHTML = "<p>Товары не найдены.</p>"; return; }
+        const ul = document.createElement('ul'); 
+        ul.style.listStyleType = 'none'; ul.style.padding = '0';
+        products.forEach(product => { 
+            const li = Object.assign(document.createElement('li'), {className: 'dropdown-item', textContent: `${product.name} (ID: ${product.id})`});
+            li.onclick = () => { 
+                const tableBody = document.getElementById(targetTableId);
+                if (tableBody) addProductToTable(tableBody, product.id, product.name); 
+                closeModal(selectExistingProductModal); 
+            }; 
+            ul.appendChild(li); 
+        }); 
+        existingProductListContainer.appendChild(ul);
+    }
+
+    function addProductToTable(tableBodyElement, productId, productName, slot = '', loading = 0, capacity = 0) {
+        if (Array.from(tableBodyElement.rows).find(r => r.dataset.productId === String(productId))) {
+            showStatus(`Товар "${productName}" уже добавлен в матрицу.`, "info"); 
+            return;
+        }
+        const row = tableBodyElement.insertRow(); 
+        row.dataset.productId = productId;
+        row.insertCell().textContent = productName; 
+        row.insertCell().textContent = productId;
+        const slotInput = Object.assign(document.createElement('input'), {type:'number', min:'1', max:String(MAX_SLOTS_IN_MATRIX), required:true, value:slot, className:'form-control-sm'});
+        const loadingInput = Object.assign(document.createElement('input'), {type:'number', min:'0', value:loading, placeholder:'0', className:'form-control-sm'});
+        const capacityInput = Object.assign(document.createElement('input'), {type:'number', min:'0', value:capacity, placeholder:'0', className:'form-control-sm'});
+        const removeBtn = Object.assign(document.createElement('button'), {type:'button', textContent:'Удалить', className:'btn btn-sm btn-danger'}); 
+        removeBtn.onclick = () => row.remove();
+        row.insertCell().appendChild(slotInput); 
+        row.insertCell().appendChild(loadingInput); 
+        row.insertCell().appendChild(capacityInput); 
+        row.insertCell().appendChild(removeBtn);
+    }
+    
+    saveNewProductModalBtn.addEventListener('click', async () => {
+        const productNameFromUserInput = newProductNameModalInput.value.trim(); 
+        const token = tokenInput.value.trim();
+        if (!productNameFromUserInput || !token) { 
+            showStatus(!productNameFromUserInput ? "Введите имя товара." : "Нет токена.", "warning"); 
+            return; 
+        }
+        setLoadingState(true, saveNewProductModalBtn, "Сохранение...");
+        console.log(`Клиент: Вызов createFullProductStack_NEW с именем: "${productNameFromUserInput}"`);
+        try {
+            const result = await google.script.runWithPromiseWrapper('createFullProductStack_NEW', { token, productNameFromUser: productNameFromUserInput });
+            console.log("Клиент: Ответ от createFullProductStack_NEW:", JSON.stringify(result)); 
+            if (result.success && result.product && result.product.id) {
+                showStatus(`Товар "${result.product.name}" (ID: ${result.product.id}) успешно создан в системе.`, "success", 10000);
+                const newProductForCache = {id: result.product.id, name: result.product.name, recipe_id: result.product.recipe_id, is_ingredient: result.product.is_ingredient };
+                const existingProductIndex = allProductsCache.findIndex(p => p.id === result.product.id);
+                if (existingProductIndex > -1) {
+                    allProductsCache[existingProductIndex] = newProductForCache;
+                } else {
+                    allProductsCache.push(newProductForCache);
+                }
+                
+                if (currentFormMode === 'create' || currentFormMode === 'edit' || currentFormMode === 'cloneAndCreate') {
+                    const targetTableBody = document.getElementById('formMatrixProductsTableBody');
+                    if (targetTableBody) addProductToTable(targetTableBody, result.product.id, result.product.name);
+                } else if (currentFormMode === 'manageProducts') {
+                    loadAndRenderAllProducts(); 
+                }
+                closeModal(addNewProductModal);
+            } else {
+                const errorDisplay = `Ошибка создания товара: ${result.error || 'Неизвестно'}. ${result.details ? 'Детали: ' + JSON.stringify(result.details) : ''} ${result.step ? 'Этап: ' + result.step : ''}`;
+                showStatus(errorDisplay, "error", 20000);
+                console.error("Ошибка createFullProductStack_NEW на клиенте:", result);
+            }
+        } catch (error) { 
+            showStatus(`Сбой при создании товара: ${error.message || error}`, "error"); 
+            console.error("Критический сбой createFullProductStack_NEW на клиенте:", error); 
+        }
+        setLoadingState(false, saveNewProductModalBtn);
+    });
+
+    function handleSaveAsNewMachine() {
+        if (!currentSelectedMachineFullData || !currentSelectedMachineFullData.machine) {
+            showStatus("Сначала загрузите данные автомата для копирования.", "warning"); return;
+        }
+        showStatus("Форма 'Сохранить как новый': выберите НОВЫЙ терминал и, при необходимости, измените другие данные.", "info", 10000);
+        
+        const dataToClone = JSON.parse(JSON.stringify(currentSelectedMachineFullData));
+        dataToClone.machine.id = null; 
+        if(dataToClone.productMatrix) dataToClone.productMatrix.id = null; 
+        dataToClone.machine.terminal_id = null; 
+        dataToClone.machine.name = ''; 
+        
+        if (dataToClone.terminal) {
+            dataToClone.terminal.tid = null;
+            dataToClone.terminal.reserve_tid_id = null;
+        }
+
+        currentFormMode = 'cloneAndCreate'; 
+        renderCreateEditMachineForm(dataToClone); 
+    }
+
+    async function showAllProductsManagementUI() {
+        currentFormMode = 'manageProducts';
+        mainDisplayArea.innerHTML = `<div class="section-block" id="allProductsManagement"><h2>Управление всеми товарами</h2>
+            <div style="margin-bottom:10px;"><button type="button" id="addNewGlobalProductBtn" class="btn btn-sm btn-success">Создать Новый Товар в Системе</button></div>
+            <input type="text" id="globalProductSearch" placeholder="Поиск товаров..." style="width:100%; margin-bottom:10px; padding:0.4rem;">
+            <table id="allProductsTable" style="width:100%; font-size:0.9em;"><thead><tr><th>ID</th><th>Наименование</th><th>Recipe ID</th><th>Действия</th></tr></thead>
+            <tbody id="allProductsTableBody"><tr><td colspan="4">Загрузка...</td></tr></tbody></table>
+        </div>`;
+        document.getElementById('addNewGlobalProductBtn').onclick = () => { newProductNameModalInput.value = ''; openModal(addNewProductModal); };
+        document.getElementById('globalProductSearch').oninput = (e) => renderAllProductsTable(allProductsCache.filter(p => p.name.toLowerCase().includes(e.target.value.toLowerCase())));
+        await loadAndRenderAllProducts(); 
+    }
+
+    async function loadAndRenderAllProducts() {
+        const token = tokenInput.value.trim(); 
+        if (!token) { showStatus("Токен API не указан", "error"); return; }
+        const tbody = document.getElementById('allProductsTableBody');
+        if(tbody) tbody.innerHTML = '<tr><td colspan="4">Загрузка всех товаров...</td></tr>';
+        setLoadingState(true, null, "Загрузка всех товаров...");
+        try {
+            const result = await google.script.runWithPromiseWrapper('getProducts', { token, ItemsOnPage: 2000 }); 
+            if (result.success && result.items) {
+                allProductsCache = result.items; 
+                renderAllProductsTable(allProductsCache);
+            } else {
+                if(tbody) tbody.innerHTML = `<tr><td colspan="4" style="color:red;">Ошибка: ${result.error || 'Нет данных'}</td></tr>`;
+                showStatus(`Ошибка загрузки всех товаров: ${result.error || 'Нет данных'}`, "error");
+            }
+        } catch (error) { 
+            if(tbody) tbody.innerHTML = `<tr><td colspan="4" style="color:red;">Сбой: ${error.message}</td></tr>`; 
+            showStatus(`Сбой загрузки всех товаров: ${error.message || error}`, "error");
+        }
+        setLoadingState(false);
+    }
+
+    function renderAllProductsTable(productsToRender) {
+        const tbody = document.getElementById('allProductsTableBody');
+        tbody.innerHTML = '';
+        if (productsToRender.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4">Товары не найдены.</td></tr>';
+            return;
+        }
+        productsToRender.forEach(product => {
+            const row = tbody.insertRow();
+            row.insertCell().textContent = product.id;
+            row.insertCell().textContent = product.name;
+            row.insertCell().textContent = product.recipe_id || 'N/A';
+            const actionsCell = row.insertCell();
+            
+            const editBtn = Object.assign(document.createElement('button'), { textContent: 'Ред. Имя', className: 'btn btn-sm btn-warning', style: 'margin-right:5px;' });
+            editBtn.onclick = () => openEditProductNameModal(product.id, product.name);
+            actionsCell.appendChild(editBtn);
+
+            const deleteBtn = Object.assign(document.createElement('button'), { textContent: 'Удалить', className: 'btn btn-sm btn-danger' });
+            deleteBtn.onclick = () => handleDeleteProductCascade(product.id, product.name);
+            actionsCell.appendChild(deleteBtn);
+        });
+    }
+    
+    function openEditProductNameModal(productId, currentName) {
+        editingProductIdModalInput.value = productId;
+        editProductNameModalInput.value = currentName;
+        openModal(editProductNameModal);
+        editProductNameModalInput.focus();
+    }
+
+    async function handleSaveEditedProductName() {
+        const token = tokenInput.value.trim();
+        const productId = editingProductIdModalInput.value;
+        const newName = editProductNameModalInput.value.trim();
+        if(!token || !productId || !newName) { 
+            showStatus("Токен, ID товара и новое имя обязательны.", "warning"); 
+            return; 
+        }
+
+        setLoadingState(true, saveEditedProductNameBtn, "Обновление имени...");
+        try {
+            const result = await google.script.runWithPromiseWrapper('updateFullProductStackName', { token, productId: parseInt(productId), newProductName: newName });
+            if (result.success) {
+                showStatus(`Имя товара ID ${productId} успешно обновлено на "${result.product.name}".`, "success");
+                const index = allProductsCache.findIndex(p => p.id == productId); 
+                if (index > -1) { 
+                    allProductsCache[index].name = result.product.name; 
+                }
+                if(currentFormMode === 'manageProducts') { 
+                    renderAllProductsTable(allProductsCache.filter(p => p.name.toLowerCase().includes(document.getElementById('globalProductSearch').value.toLowerCase())));
+                } else if (currentSelectedMachineFullData && (currentFormMode === 'edit' || currentFormMode === 'viewMachine')) { 
+                    loadAndDisplaySelectedMachineData(); 
+                }
+                closeModal(editProductNameModal);
+            } else {
+                showStatus(`Ошибка обновления имени: ${result.error || 'Неизвестно'}. Шаг: ${result.step}`, "error", 10000);
+                console.error("Ошибка updateFullProductStackName:", result);
+            }
+        } catch (error) {showStatus(`Сбой обновления имени: ${error.message}`, "error");}
+        setLoadingState(false, saveEditedProductNameBtn);
+    }
+
+    async function handleDeleteProductCascade(productId, productName) {
+        if (!confirm(`Вы уверены, что хотите удалить товар "${productName}" (ID: ${productId}) и все связанные с ним ингредиенты и рецепты? Это действие необратимо.`)) return;
+        const token = tokenInput.value.trim();
+        if (!token) { showStatus("Токен API не указан.", "error"); return; }
+
+        setLoadingState(true, null, "Удаление товара...");
+        try {
+            const result = await google.script.runWithPromiseWrapper('deleteProductCascade', { token, productId });
+            if (result.success) {
+                showStatus(`Товар "${productName}" и связанные сущности успешно удалены.`, "success");
+                allProductsCache = allProductsCache.filter(p => p.id != productId); 
+                if (currentFormMode === 'manageProducts') {
+                     renderAllProductsTable(allProductsCache.filter(p => p.name.toLowerCase().includes(document.getElementById('globalProductSearch').value.toLowerCase())));
+                } else if (currentSelectedMachineFullData && (currentFormMode === 'edit' || currentFormMode === 'viewMachine')){
+                    loadAndDisplaySelectedMachineData();
+                }
+            } else {
+                showStatus(`Ошибка удаления товара: ${result.error || 'Неизвестно'}`, "error", 10000);
+            }
+        } catch (error) {showStatus(`Сбой при удалении товара: ${error.message}`, "error");}
+        setLoadingState(false);
+    }
+    
+    async function handleDeleteMachine() {
+        const machineId = machineSelectDropdownInput.dataset.selectedMachineId;
+        const machineData = allMachinesForDropdown.find(m => m.id == machineId); 
+        if (!machineId || !machineData) { showStatus("Автомат не выбран.", "warning"); return;}
+        const machineName = machineData.name;
+        const productMatrixId = machineData.product_matrix_id; 
+
+        if (!confirm(`Вы уверены, что хотите удалить автомат "${machineName}" (ID: ${machineId})? Связанная товарная матрица (ID: ${productMatrixId || 'не указан'}) также будет удалена, если она существует.`)) return;
+        
+        const token = tokenInput.value.trim();
+        if (!token) { showStatus("Токен API не указан.", "error"); return; }
+
+        setLoadingState(true, deleteSelectedMachineBtn, "Удаление автомата...");
+        try {
+            const deleteMachineResult = await google.script.runWithPromiseWrapper('deleteMachine', {token, id: machineId});
+            if(deleteMachineResult.success) {
+                showStatus(`Автомат "${machineName}" успешно удален.`, "success", 0); 
+                if(productMatrixId){ 
+                    showStatus(`Автомат "${machineName}" удален. Удаление связанной матрицы ID ${productMatrixId}...`, "info", 0);
+                    const deleteMatrixResult = await google.script.runWithPromiseWrapper('deleteProductMatrix', {token, id: parseInt(productMatrixId)}); 
+                    if(deleteMatrixResult.success){
+                         showStatus(`Автомат "${machineName}" и связанная матрица ID ${productMatrixId} успешно удалены.`, "success"); 
+                    } else {
+                         showStatus(`Автомат "${machineName}" удален, но ошибка при удалении матрицы ID ${productMatrixId}: ${deleteMatrixResult.error || 'Неизвестно'}`, "warning");
+                    }
+                } else {
+                     showStatus(`Автомат "${machineName}" успешно удален (без связанной матрицы).`, "success");
+                }
+                
+                machineSelectDropdownInput.value = '';
+                delete machineSelectDropdownInput.dataset.selectedMachineId;
+                editSelectedMachineBtn.style.display = 'none';
+                deleteSelectedMachineBtn.style.display = 'none';
+                mainDisplayArea.innerHTML = '<p>Автомат удален. Выберите другой или создайте новый.</p>';
+                currentSelectedMachineFullData = null;
+                loadAllMachinesForDropdown(); 
+            } else {
+                showStatus(`Ошибка удаления автомата: ${deleteMachineResult.error || 'Неизвестно'}`, "error");
+            }
+        } catch (error) {
+            showStatus(`Сбой при удалении автомата: ${error.message}`, "error");
+        }
+        setLoadingState(false, deleteSelectedMachineBtn);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        tokenInput.value = VENDISTA_API_TOKEN_CONST;
+        if (tokenInput.value.trim()) {
+            loadAllMachinesForDropdown(); 
+        } else {
+            populateMachineSelectDropdown();
+        }
+        
+        tokenInput.addEventListener('change', loadAllMachinesForDropdown);
+        machineSelectDropdownInput.addEventListener('input', (e) => populateMachineSelectDropdown(e.target.value.trim()));
+        machineSelectDropdownInput.addEventListener('focus', () => { 
+            if(machineSelectDropdownMenu.children.length <=1 && allMachinesForDropdown.length > 0) {
+                populateMachineSelectDropdown(); 
+            }
+            machineSelectDropdownMenu.style.display = 'block';
+        });
+        machineSelectDropdownBtn.addEventListener('click', () => toggleDropdown(machineSelectDropdownMenu, machineSelectDropdownBtn));
+        document.addEventListener('click', (e) => { 
+            if (machineSelectDropdownMenu && !machineSelectDropdownMenu.contains(e.target) && e.target !== machineSelectDropdownInput && e.target !== machineSelectDropdownBtn) {
+                hideDropdown(machineSelectDropdownMenu, machineSelectDropdownBtn);
+            }
+        });
+
+        viewSelectedMachineBtn.onclick = () => { 
+            if(machineSelectDropdownInput.dataset.selectedMachineId) {
+                showForm('viewMachine'); 
+            } else {
+                showStatus("Выберите автомат для просмотра.", "warning");
+            }
+        };
+        editSelectedMachineBtn.onclick = () => { 
+            if(machineSelectDropdownInput.dataset.selectedMachineId && currentSelectedMachineFullData) {
+                showForm('editMachine'); 
+            } else {
+                showStatus("Сначала выберите и просмотрите автомат, чтобы его редактировать.", "warning");
+            }
+        };
+        createNewMachineBtn.onclick = () => showForm('createMachine');
+        manageAllProductsBtnGlobal.onclick = () => showForm('manageProducts'); 
+        deleteSelectedMachineBtn.onclick = handleDeleteMachine;
+        
+        document.getElementById('closeNewProductModalBtn').onclick = () => closeModal(addNewProductModal);
+        document.getElementById('cancelNewProductModalBtn').onclick = () => closeModal(addNewProductModal);
+        document.getElementById('closeSelectProductModalBtn').onclick = () => closeModal(selectExistingProductModal);
+        document.getElementById('cancelSelectProductModalBtn').onclick = () => closeModal(selectExistingProductModal);
+        document.getElementById('closeEditProductModalBtn').onclick = () => closeModal(editProductNameModal);
+        document.getElementById('cancelEditProductModalBtn').onclick = () => closeModal(editProductNameModal);
+        
+        saveEditedProductNameBtn.onclick = handleSaveEditedProductName;
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,578 @@
+/*******************************************************
+Code.gs
+*******************************************************/
+const SPREADSHEET_ID = '18iZ3agRiDdMebNNQVMZMBJJE7AkQ8h4tAHmH6zn0_R4'; // ЗАМЕНИТЕ НА ВАШ ID ТАБЛИЦЫ
+const API_TOKEN = 'fe38f8470367451f81228617'; // ВАШ РАБОЧИЙ ТОКЕН
+
+// --- Константы для API ---
+const API_BASE_URL = 'https://api.vendista.ru:99';
+const ITEMS_ON_PAGE_DEFAULT = 1000;
+const ORDER_BY_COLUMN_EVENTS_DEFAULT = 6; // Для событий
+const ORDER_DESC_DEFAULT = "true"; // Для событий
+const TRANSACTION_STATUS_REFUND = 4; 
+
+// --- Вспомогательные функции ---
+function addQueryParam_(query, name, value) { if (value !== undefined && value !== null && value !== "") query.push(name + "=" + encodeURIComponent(value));}
+function formatDateParam_(dateStr) { if (!dateStr) return ""; if (dateStr.includes('T')) return dateStr; return dateStr + "T00:00:00";}
+
+function fetchApiData_(url, errorMessagePrefix) {
+  try {
+    const response = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    const responseCode = response.getResponseCode();
+    const contentText = response.getContentText();
+
+    if (responseCode !== 200) {
+      Logger.log(`API Error Response (${errorMessagePrefix}): Code ${responseCode}, Content: ${contentText}`);
+      throw new Error(`${errorMessagePrefix}: ${responseCode} - ${contentText.slice(0, 200)}`);
+    }
+
+    const jsonData = JSON.parse(contentText);
+    if (!jsonData || (jsonData.success !== undefined && !jsonData.success)) { // Проверяем success только если он есть
+      Logger.log(`API Data Error (${errorMessagePrefix}): Content: ${contentText}`);
+      throw new Error(`${errorMessagePrefix}: ${(jsonData.error || "Некорректный ответ").slice(0,200)}`);
+    }
+    return jsonData;
+  } catch (e) {
+    Logger.log(`Исключение в fetchApiData_ (${errorMessagePrefix}): ${e.toString()}\nStack: ${e.stack}`);
+    throw e;
+  }
+}
+
+// --- Основные функции ---
+function doGet() { return HtmlService.createTemplateFromFile("Index").evaluate().setTitle("Отчёты Vendista").setFaviconUrl("https://ssl.gstatic.com/docs/doclist/images/infinite_arrow_favicon_5.ico");}
+function include(filename) { return HtmlService.createTemplateFromFile(filename).getRawContent();}
+
+function cronLoadAll() {
+  const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
+  const common = { ItemsOnPage: ITEMS_ON_PAGE_DEFAULT };
+  try { Logger.log("CRON: Обновление продаж за сегодня..."); updateDataSales({ ...common, DateFrom: today, DateTo: today }); } catch (e) { Logger.log("CRON ERROR updateDataSales: " + e.toString() + "\nStack: " + e.stack); }
+  try { Logger.log("CRON: Обновление событий за вчера и сегодня..."); const yesterday = Utilities.formatDate(new Date(Date.now() - 86400000), Session.getScriptTimeZone(), "yyyy-MM-dd"); updateDataEvents({ DateFrom: yesterday, DateTo: today, ItemsOnPageForApi: ITEMS_ON_PAGE_DEFAULT });  } catch (e) { Logger.log("CRON ERROR updateDataEvents: " + e.toString() + "\nStack: " + e.stack); }
+  try { Logger.log("CRON: Обновление возвратов за сегодня..."); updateDataRefunds({ ...common, DateFrom: today, DateTo: today, isRefundsOnly: true }); } catch (e) { Logger.log("CRON ERROR updateDataRefunds: " + e.toString() + "\nStack: " + e.stack); }
+  Logger.log("CRON: Завершено.");
+}
+
+function getMachinesList() {
+  const url = `${API_BASE_URL}/machines?ItemsOnPage=${ITEMS_ON_PAGE_DEFAULT}&ShowDisconnected=true&token=` + encodeURIComponent(API_TOKEN);
+  try {
+    const json = fetchApiData_(url, "Ошибка API (getMachinesList)");
+    if (!json || !json.items) { Logger.log("Пустой или некорректный ответ API (getMachinesList): " + JSON.stringify(json)); return []; }
+    return json.items.map(function(m) {
+      const name = m.name || "Без имени";
+      const address = m.address || "Адрес не указан";
+      const label = `${name} | ${address} (ID: ${m.id})`;
+      return { id: m.id, text: label, terminal_id: m.terminal_id };
+    });
+  } catch (e) { Logger.log("Исключение в getMachinesList: " + e.toString() + "\nStack: " + e.stack); throw new Error("Не удалось загрузить список автоматов: " + e.message); }
+}
+
+//------------------------------------------------------
+// 1) ОТЧЁТ "Продажи (Сводка)" (Sales Totals)
+//------------------------------------------------------
+function updateDataSales(params) { if (!params) throw new Error("Параметры не заданы (Sales)."); const result = fetchDataFromApiSales(params); if (result && result.headers && result.data && result.data.length > 1 && !result.from_cache) { const dataWithoutTotal = result.data.slice(0, -1); writeTableToSheet_('Sales', result.headers, dataWithoutTotal); } return result; }
+function fetchDataFromApiSales(params) {
+  const baseUrl = `${API_BASE_URL}/sales/totals`;
+  const query = [];
+  addQueryParam_(query, "token", API_TOKEN);
+  addQueryParam_(query, "MachineId", params.MachineId);
+  addQueryParam_(query, "DivisionId", params.DivisionId);
+  addQueryParam_(query, "DateFrom", formatDateParam_(params.DateFrom));
+  addQueryParam_(query, "DateTo", formatDateParam_(params.DateTo));
+  addQueryParam_(query, "ItemsOnPage", params.ItemsOnPage || ITEMS_ON_PAGE_DEFAULT);
+  addQueryParam_(query, "FilterText", params.FilterText);
+  addQueryParam_(query, "PageNumber", params.PageNumber || 1);
+  const url = baseUrl + (query.length ? "?" + query.join("&") : "");
+  Logger.log("Sales API URL: " + url);
+  try {
+    const jsonData = fetchApiData_(url, "Ошибка API (Продажи)");
+    if (!jsonData.items || !jsonData.items.length) return { headers: ["Сообщение"], data: [["Нет данных по продажам за указанный период"]], items_count: 0, page_number: 1, items_per_page: 0 };
+    return processDataSales(jsonData);
+  } catch (e) { Logger.log(`Исключение в fetchDataFromApiSales: ${e.toString()}\nStack: ${e.stack}`); throw e;  }
+}
+function processDataSales(jsonData) {
+  const headersFromApi = Object.keys(jsonData.items[0]);
+  const dataFromApi = jsonData.items.map(item => Object.values(item));
+  const excludedColumns = ["machine_id", "machine_name", "machine_model", "percentage"];
+  const columnMapping = { "machine_address": "Адрес", "sum": "Сумма", "cash_count": "Кол-во нал", "cash_sum": "Нал", "cashless_count": "Кол-во безнал", "cashless_sum": "Безнал", "division_name": "Город", "terminal_id": "Терминал", "sale_datetime": "Время продажи" };
+  const columnsToKeepIndices = headersFromApi.reduce((acc, header, index) => { if (!excludedColumns.includes(header)) acc.push(index); return acc; }, []);
+  let filteredHeaders = columnsToKeepIndices.map(i => columnMapping[headersFromApi[i]] || headersFromApi[i]);
+  let filteredData = dataFromApi.map(row => columnsToKeepIndices.map(i => row[i]));
+  const sumColumnsNames = ["Сумма", "Нал", "Безнал"];
+  const countColumnsNames = ["Кол-во нал", "Кол-во безнал"];
+  const sumIndices = [], countIndices = [];
+  filteredHeaders.forEach((h, i) => { if (sumColumnsNames.includes(h)) sumIndices.push(i); if (countColumnsNames.includes(h)) countIndices.push(i); });
+  const totalSumsArray = new Array(filteredHeaders.length).fill(0);
+  let totalOverallSum = 0;
+  let totalCashSum = 0;
+  let totalCashlessSum = 0;
+
+  const processedData = filteredData.map(row => {
+    return row.map((cell, index) => {
+      if (sumIndices.includes(index)) {
+        const val = parseFloat(cell) / 100 || 0;
+        totalSumsArray[index] += val;
+        if (filteredHeaders[index] === "Сумма") totalOverallSum += val;
+        if (filteredHeaders[index] === "Нал") totalCashSum += val;
+        if (filteredHeaders[index] === "Безнал") totalCashlessSum += val;
+        return val.toLocaleString("ru-RU", { minimumFractionDigits: 2 });
+      }
+      if (countColumnsNames.includes(index)) {
+        const val = parseInt(cell) || 0;
+        totalSumsArray[index] += val;
+        return val;
+      }
+      if (filteredHeaders[index] === "Время продажи" && cell) { try { return Utilities.formatDate(new Date(cell), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss"); } catch (e) { return cell; } }
+      return cell;
+    });
+  });
+  const totalRow = filteredHeaders.map((header, i) => {
+    if (i === 0) return "ИТОГО";
+    if (sumIndices.includes(i) || countIndices.includes(i)) return totalSumsArray[i].toLocaleString("ru-RU", { minimumFractionDigits: (sumIndices.includes(i) ? 2 : 0) });
+    return "";
+  });
+  processedData.push(totalRow);
+  return {
+    headers: filteredHeaders,
+    data: processedData,
+    items_count: jsonData.items_count,
+    page_number: jsonData.page_number,
+    items_per_page: jsonData.items_per_page,
+    total_overall_sum: totalOverallSum,
+    total_cash_sum: totalCashSum,
+    total_cashless_sum: totalCashlessSum
+  };
+}
+
+//------------------------------------------------------
+// 2) ОТЧЁТ "Продажи (Список)" (Sales List)
+//------------------------------------------------------
+function getSalesListData(params) {
+  if (!params) throw new Error("Параметры не заданы (Sales List).");
+  
+  const baseUrl = `${API_BASE_URL}/sales/list`;
+  const baseQuery = [];
+  addQueryParam_(baseQuery, "token", API_TOKEN);
+  
+  // Добавляем общие фильтры
+  addQueryParam_(baseQuery, "MachineId", params.MachineId);
+  addQueryParam_(baseQuery, "DivisionId", params.DivisionId);
+  addQueryParam_(baseQuery, "DateFrom", formatDateParam_(params.DateFrom));
+  addQueryParam_(baseQuery, "DateTo", formatDateParam_(params.DateTo));
+  addQueryParam_(baseQuery, "FilterText", params.FilterText);
+  
+  // Добавляем фильтры по типу продажи
+  const sellTypeParam = params.SellTypes;
+  let typesToQuery = [];
+
+  if (!sellTypeParam || sellTypeParam === 'all') {
+      typesToQuery = ["1", "2", "3", "4", "87", "88", "89", "90", "91", "97", "98", "99"];
+  } else {
+      typesToQuery = [sellTypeParam];
+  }
+  
+  typesToQuery.forEach(type => {
+      addQueryParam_(baseQuery, "SellTypes", type);
+  });
+
+  if (params.IsReturn === true) {
+    addQueryParam_(baseQuery, "IsReturn", "true");
+  }
+  
+  let allItems = [];
+  let currentPage = 1;
+  let totalPages = 1;
+  const itemsPerPageApi = params.ItemsOnPage || ITEMS_ON_PAGE_DEFAULT;
+
+  do {
+    const currentQuery = [...baseQuery];
+    addQueryParam_(currentQuery, "ItemsOnPage", itemsPerPageApi);
+    addQueryParam_(currentQuery, "PageNumber", currentPage);
+    const url = baseUrl + "?" + currentQuery.join("&");
+    Logger.log("Sales List API URL (Page " + currentPage + "): " + url);
+
+    try {
+      const jsonData = fetchApiData_(url, "Ошибка API (Список Продаж)");
+      if (jsonData.items && jsonData.items.length > 0) {
+        allItems = allItems.concat(jsonData.items);
+      }
+      if (currentPage === 1) {
+        totalPages = Math.ceil((jsonData.items_count || 0) / itemsPerPageApi);
+      }
+      currentPage++;
+    } catch (e) {
+      Logger.log(`Исключение в getSalesListData: ${e.toString()}\nStack: ${e.stack}`);
+      throw e;
+    }
+  } while (currentPage <= totalPages);
+
+  if (allItems.length === 0) {
+    return { headers: ["Сообщение"], data: [["Нет данных по продажам для указанных фильтров"]], total_overall_sum: 0, analytics: null };
+  }
+  
+  // Сортировка по умолчанию: от новых к старым
+  allItems.sort((a, b) => new Date(b.time) - new Date(a.time));
+
+  return processSalesListData({ items: allItems });
+}
+
+function processSalesListData(jsonData) {
+  const items = jsonData.items || [];
+  
+  const displayHeaders = ["Дата", "Автомат", "Адрес", "Товар", "Тип", "Сумма", "Возврат?"];
+  const sellTypeMapping = { 
+    1: "Нал", 2: "Безнал", 3: "Внеш. кредит", 4: "Бонусы", 
+    99: "Ошибка удаленная выдача(время)", 98: "Ошибка безнал(время)", 97: "Ошибка наличные (время)",
+    89: "Ошибка удаленная выдача(датчик)", 88: "Ошибка безнал(датчик)", 87: "Ошибка наличные (датчик)",
+    90: "Лимит времени", 91: "Внесено больше"
+  };
+  
+  const analytics = {
+    totals: {
+      total_sum: 0, total_count: 0,
+      cash_sum: 0, cash_count: 0,
+      cashless_sum: 0, cashless_count: 0,
+      credit_sum: 0, credit_count: 0,
+      bonus_sum: 0, bonus_count: 0,
+      return_sum: 0, return_count: 0,
+      error_99_count: 0, error_98_count: 0, error_97_count: 0,
+      error_89_count: 0, error_88_count: 0, error_87_count: 0,
+      error_90_count: 0, error_91_count: 0
+    },
+    topProducts: {}
+  };
+
+  const processedData = items.map(item => {
+    const sumValue = parseFloat(item.item_price) / 100 || 0;
+    const productName = item.item_name || "Не указан";
+
+    if (item.is_return) {
+      analytics.totals.return_sum += sumValue;
+      analytics.totals.return_count++;
+    } else {
+      // Общая сумма и кол-во считаются для всех, кроме возвратов
+      analytics.totals.total_sum += sumValue;
+      analytics.totals.total_count++;
+      
+      switch(item.sell_type) {
+        case 1: analytics.totals.cash_sum += sumValue; analytics.totals.cash_count++; break;
+        case 2: analytics.totals.cashless_sum += sumValue; analytics.totals.cashless_count++; break;
+        case 3: analytics.totals.credit_sum += sumValue; analytics.totals.credit_count++; break;
+        case 4: analytics.totals.bonus_sum += sumValue; analytics.totals.bonus_count++; break;
+        case 99: analytics.totals.error_98_count++; break; // Swapped
+        case 98: analytics.totals.error_99_count++; break; // Swapped
+        case 97: analytics.totals.error_97_count++; break;
+        case 89: analytics.totals.error_88_count++; break; // Swapped
+        case 88: analytics.totals.error_89_count++; break; // Swapped
+        case 87: analytics.totals.error_87_count++; break;
+        case 90: analytics.totals.error_90_count++; break;
+        case 91: analytics.totals.error_91_count++; break;
+      }
+      
+      // В топ-товары не включаем ошибки
+      if (productName !== "Не указан" && item.sell_type < 50) { 
+          analytics.topProducts[productName] = (analytics.topProducts[productName] || { count: 0, sum: 0, name: productName });
+          analytics.topProducts[productName].count++;
+          analytics.topProducts[productName].sum += sumValue;
+      }
+    }
+    
+    return [
+      item.time ? Utilities.formatDate(new Date(item.time), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss") : "Н/Д",
+      item.machine_name || "Н/Д",
+      item.machine_address || "Н/Д",
+      productName,
+      sellTypeMapping[item.sell_type] || item.sell_type,
+      sumValue.toLocaleString("ru-RU", { minimumFractionDigits: 2 }),
+      item.is_return ? "Да" : "Нет"
+    ];
+  });
+
+  analytics.topProducts = Object.values(analytics.topProducts).sort((a, b) => b.sum - a.sum).slice(0, 20);
+
+  return {
+    headers: displayHeaders,
+    data: processedData,
+    total_overall_sum: analytics.totals.total_sum,
+    analytics: analytics
+  };
+}
+
+
+//------------------------------------------------------
+// 3) ОТЧЁТ "События" (Events)
+//------------------------------------------------------
+function updateDataEvents(params) { if (!params) throw new Error("Параметры не заданы (Events)."); return fetchDataFromApiEvents(params); }
+function fetchDataFromApiEvents(params) {
+  const baseUrl = `${API_BASE_URL}/events`;
+  const baseQuery = [];
+  addQueryParam_(baseQuery, "token", API_TOKEN);
+  addQueryParam_(baseQuery, "MachineId", params.MachineId);
+  addQueryParam_(baseQuery, "DivisionId", params.DivisionId);
+  addQueryParam_(baseQuery, "DateFrom", formatDateParam_(params.DateFrom));
+  addQueryParam_(baseQuery, "DateTo", formatDateParam_(params.DateTo));
+  addQueryParam_(baseQuery, "FilterText", params.FilterText);
+  addQueryParam_(baseQuery, "OrderByColumn", params.OrderByColumn || ORDER_BY_COLUMN_EVENTS_DEFAULT);
+  addQueryParam_(baseQuery, "OrderDesc", params.OrderDesc || ORDER_DESC_DEFAULT);
+  let allItems = [];
+  let currentPage = 1;
+  let totalPages = 1;
+  let firstResponseData = null;
+  const itemsPerPageApi = params.ItemsOnPageForApi || ITEMS_ON_PAGE_DEFAULT;
+  Logger.log("Fetching all events. Initial params: " + JSON.stringify(params) + ", ItemsPerPageForAPI: " + itemsPerPageApi);
+  do {
+    const currentQuery = [...baseQuery];
+    addQueryParam_(currentQuery, "ItemsOnPage", itemsPerPageApi);
+    addQueryParam_(currentQuery, "PageNumber", currentPage);
+    const url = baseUrl + "?" + currentQuery.join("&");
+    Logger.log("Events API URL (Page " + currentPage + "): " + url);
+    try {
+      const jsonData = fetchApiData_(url, "Ошибка API (События)");
+      if (!firstResponseData) firstResponseData = jsonData;
+      else if (jsonData.total && jsonData.total.sum !== undefined) firstResponseData.total = jsonData.total;
+      if (jsonData.items && jsonData.items.length > 0) allItems = allItems.concat(jsonData.items);
+      if (currentPage === 1) { 
+        totalPages = Math.ceil((jsonData.items_count || 0) / itemsPerPageApi);
+      }
+      currentPage++;
+    } catch (e) { Logger.log(`Исключение в fetchDataFromApiEvents: ${e.toString()}\nStack: ${e.stack}`); throw e; }
+  } while (currentPage <= totalPages);
+  return processDataEvents({ ...firstResponseData, items: allItems, items_count: allItems.length });
+}
+function processDataEvents(jsonData) {
+  const items = jsonData.items || [];
+  const analytics = { totals: { cash: 0, cashless: 0, sbp: 0, total: 0 }, topProducts: {}, eventTypes: {}, specialProductsData: { "100": { sum: 0, count: 0, name: "Лимит времени (тов.100)" }, "33": { sum: 0, count: 0, name: "Внесено больше (тов.33)" } } };
+  if (!items.length) {
+    const emptyMsg = "Нет данных по событиям за указанный период";
+    return { headers: ["Сообщение"], data: [[emptyMsg]], page_number: 1, items_per_page: 0, items_count: 0, total_api_sum: (jsonData.total && typeof jsonData.total.sum === 'number') ? jsonData.total.sum / 100 : 0, success: jsonData.success, error: jsonData.error, analytics: analytics };
+  }
+  const displayHeaders = ["Дата", "Автомат", "Адрес", "Событие", "№/Товар", "Сумма", "Город"];
+  const apiKeysForDisplay = ["date", "machine_name", "machine_address", "event_name", "product_name", "sum", "division_name"];
+  items.forEach(item => {
+    const originalEventName = item.event_name || "";
+    const sumValueRaw = parseFloat(item.sum) || 0;
+    const sumValueRubles = sumValueRaw / 100;
+    const productName = String(item.product_name || (originalEventName.includes("Продажа") ? "Не указан" : ""));
+
+    if (analytics.specialProductsData[productName]) {
+      analytics.specialProductsData[productName].sum += sumValueRubles;
+      analytics.specialProductsData[productName].count++;
+    } else {
+      if (originalEventName.includes("Продажа безнал")) {
+        analytics.totals.cashless += sumValueRubles;
+        if (productName !== "Не указан") {
+          analytics.topProducts[productName] = (analytics.topProducts[productName] || { count: 0, sum: 0, name: productName });
+          analytics.topProducts[productName].count++;
+          analytics.topProducts[productName].sum += sumValueRubles;
+        }
+      } else if (originalEventName.includes("Продажа нал")) {
+        analytics.totals.cash += sumValueRubles;
+        if (productName !== "Не указан") {
+          analytics.topProducts[productName] = (analytics.topProducts[productName] || { count: 0, sum: 0, name: productName });
+          analytics.topProducts[productName].count++;
+          analytics.topProducts[productName].sum += sumValueRubles;
+        }
+      } else if (originalEventName.includes("Продажа СБП")) {
+        analytics.totals.sbp += sumValueRubles;
+        if (productName !== "Не указан") {
+          analytics.topProducts[productName] = (analytics.topProducts[productName] || { count: 0, sum: 0, name: productName });
+          analytics.topProducts[productName].count++;
+          analytics.topProducts[productName].sum += sumValueRubles;
+        }
+      }
+    }
+    analytics.totals.total += sumValueRubles;
+    analytics.eventTypes[originalEventName] = (analytics.eventTypes[originalEventName] || { count: 0, sum: 0, name: originalEventName });
+    analytics.eventTypes[originalEventName].count++;
+    analytics.eventTypes[originalEventName].sum += sumValueRubles;
+  });
+
+  analytics.topProducts = Object.values(analytics.topProducts).sort((a, b) => b.sum - a.sum).slice(0, 20);
+  analytics.eventTypes = Object.values(analytics.eventTypes).sort((a, b) => b.count - a.count);
+
+  const processedData = items.map(item => {
+    return apiKeysForDisplay.map(key => {
+      let value = item[key];
+      if (key === "date" && value) {
+        try { return Utilities.formatDate(new Date(value), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss"); } catch (e) { return value; }
+      }
+      if (key === "sum") { return (parseFloat(value) / 100 || 0).toLocaleString("ru-RU", { minimumFractionDigits: 2 }); }
+      return value || "";
+    });
+  });
+
+  return {
+    headers: displayHeaders,
+    data: processedData,
+    items_count: items.length,
+    page_number: jsonData.page_number,
+    items_per_page: jsonData.items_per_page,
+    total_api_sum: (jsonData.total && typeof jsonData.total.sum === 'number') ? jsonData.total.sum / 100 : 0,
+    success: jsonData.success,
+    error: jsonData.error,
+    analytics: analytics
+  };
+}
+
+//------------------------------------------------------
+// 4) ОТЧЁТ "Возвраты" (Refunds)
+//------------------------------------------------------
+function updateDataRefunds(params) {
+  if (!params) throw new Error("Параметры не заданы (Возвраты).");
+  return fetchDataFromApiRefunds(params);
+}
+
+function fetchDataFromApiRefunds(params) {
+  const baseUrl = `${API_BASE_URL}/transactions`;
+  const baseQuery = [];
+  addQueryParam_(baseQuery, "token", API_TOKEN);
+  addQueryParam_(baseQuery, "OwnerId", "28689");
+  addQueryParam_(baseQuery, "TermId", params.TermId);
+  addQueryParam_(baseQuery, "DivisionId", params.DivisionId);
+  addQueryParam_(baseQuery, "DateFrom", formatDateParam_(params.DateFrom));
+  addQueryParam_(baseQuery, "DateTo", formatDateParam_(params.DateTo));
+  addQueryParam_(baseQuery, "OrderDesc", "true");
+  
+  if (params.isRefundsOnly) {
+    addQueryParam_(baseQuery, "FilterText", "0400");
+  }
+
+  let allItems = [];
+  let currentPage = 1;
+  let totalPages = 1;
+  const itemsPerPageApi = params.ItemsOnPage || ITEMS_ON_PAGE_DEFAULT;
+
+  do {
+    const currentQuery = [...baseQuery];
+    addQueryParam_(currentQuery, "ItemsOnPage", itemsPerPageApi);
+    addQueryParam_(currentQuery, "PageNumber", currentPage);
+    const url = baseUrl + "?" + currentQuery.join("&");
+    Logger.log(`Refunds API URL (Page ${currentPage}): ${url}`);
+
+    try {
+      const jsonData = fetchApiData_(url, "Ошибка API (Возвраты)");
+      if (jsonData.items && jsonData.items.length > 0) {
+        allItems = allItems.concat(jsonData.items);
+      }
+      if (currentPage === 1) {
+        totalPages = Math.ceil((jsonData.items_count || 0) / itemsPerPageApi);
+      }
+      currentPage++;
+    } catch (e) {
+      Logger.log(`Исключение в fetchDataFromApiRefunds: ${e.toString()}\nStack: ${e.stack}`);
+      if (e.message.includes("уменьшите интервал")) {
+          throw new Error("Слишком большой период для отчета по возвратам. Пожалуйста, уменьшите интервал дат.");
+      }
+      throw e;
+    }
+  } while (currentPage <= totalPages);
+
+  return processDataRefunds({ items: allItems, items_count: allItems.length, requestUrl: baseUrl + "?" + baseQuery.join("&"), isRefundsOnly: params.isRefundsOnly });
+}
+
+function processDataRefunds(jsonData) {
+  let items = jsonData.items || [];
+  if (jsonData.isRefundsOnly) {
+      items = items.filter(item => item.sum < 0);
+  }
+
+  if (!items.length) {
+    const emptyMsg = `Нет данных по возвратам за указанный период. Запрос: ${jsonData.requestUrl}`;
+    return { headers: ["Сообщение"], data: [[emptyMsg]], items_count: 0, total_overall_sum: 0 };
+  }
+
+  const responseCodeMapping = {
+    0: "Успешно",
+    51: "Недостаточно средств на карте (процессинг Эвотор)",
+    59: "Недостаточно средств на карте",
+    116: "Недостаточно средств на карте",
+    120: "Недостаточно средств на карте или другая ошибка",
+    992: "нет связи с банком",
+    999: "К терминалу не привязан TID или хост банка недоступен, или другая ошибка сервера",
+    995: "Продажа за бонусы",
+    996: "Отсутствует ответ от банка",
+    997: "Банк недоступен",
+    998: "TID не привязан или принадлежит другому процессингу."
+  };
+
+  const displayHeaders = ["Дата", "Автомат", "Адрес", "Товар", "Сумма", "Статус", "Код ответа"];
+  
+  let totalRefundSum = 0;
+  const rowClasses = [];
+
+  const processedData = items.map(item => {
+    const sumVal = parseFloat(item.sum) / 100 || 0;
+    totalRefundSum += sumVal;
+
+    const statusText = responseCodeMapping[item.response_code] || item.response_text || "Неизвестный статус";
+    
+    let itemName = "нет проводки";
+    if (item.machine_item && Array.isArray(item.machine_item) && item.machine_item.length > 0 && item.machine_item[0]) {
+        itemName = item.machine_item[0].item_info || "нет проводки";
+    }
+
+    let rowClass = '';
+    if (item.sum < 0) {
+      rowClass = 'table-danger';
+    } else if (item.response_code == 0 && itemName === "нет проводки") {
+      rowClass = 'table-dark';
+    } else if (item.response_code != 0) {
+      rowClass = 'table-warning';
+    }
+    rowClasses.push(rowClass);
+
+    return [
+      item.time ? Utilities.formatDate(new Date(item.time), Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss") : "Н/Д",
+      item.term_id || "Н/Д",
+      item.terminal_comment || "Н/Д",
+      itemName,
+      sumVal.toLocaleString("ru-RU", { minimumFractionDigits: 2 }),
+      statusText,
+      item.response_code !== undefined ? item.response_code : "Н/Д"
+    ];
+  });
+
+  const totalRow = new Array(displayHeaders.length).fill('');
+  totalRow[0] = "ИТОГО";
+  const sumIndex = displayHeaders.indexOf("Сумма");
+  if (sumIndex !== -1) {
+    totalRow[sumIndex] = totalRefundSum.toLocaleString("ru-RU", { minimumFractionDigits: 2 });
+  }
+  processedData.push(totalRow);
+  rowClasses.push('table-info fw-bold'); // Class for the total row
+
+  return {
+    headers: displayHeaders,
+    data: processedData,
+    rowClasses: rowClasses,
+    items_count: items.length,
+    total_overall_sum: totalRefundSum
+  };
+}
+
+//------------------------------------------------------
+// 5) ОТЧЁТ "Автоматы"
+//------------------------------------------------------
+const MACHINES_BASE_URL = `${API_BASE_URL}/machines`;
+function getMachineData(filters) {
+  try {
+    const url = `${MACHINES_BASE_URL}?token=${API_TOKEN}&Stat=true&ItemsOnPage=${ITEMS_ON_PAGE_DEFAULT}&ShowWorking=true&ShowWarning=true&ShowFailed=true&ShowDisconnected=true`;
+    const jsonData = fetchApiData_(url, "Ошибка API (Автоматы)");
+    const processedItems = processAndFilterItems_(jsonData.items, filters);
+    return JSON.stringify({ success: true, items: processedItems, total: processedItems.length });
+  } catch (e) {
+    Logger.log(e.toString());
+    return JSON.stringify({ success: false, error: e.toString() });
+  }
+}
+function hasNoSalesIn48h_(item) { if (!item.last_sale) return true;  const hoursSinceLastSale = (new Date() - new Date(item.last_sale)) / (1000 * 60 * 60); return hoursSinceLastSale > 48; }
+function processAndFilterItems_(items, filters) { if (!items) return []; const filtered = items.filter(item => { const isFailed = item.state_mask === 1; const isWarning = !isFailed && hasNoSalesIn48h_(item); const isWorking = !isFailed && !isWarning; if (filters.showFailed && isFailed) return true; if (filters.showWarning && isWarning) return true; if (filters.showWorking && isWorking) return true; return false; }); const processed = filtered.map(item => { const isFailed = item.state_mask === 1; const isWarning = !isFailed && hasNoSalesIn48h_(item); let rowClass = ''; if (isFailed) { rowClass = 'table-danger'; }  else if (isWarning) { rowClass = 'table-warning'; } return { name: item.name || 'Без названия', address: item.address || 'Адрес не указан', statusText: isFailed ? 'Нет питания' : 'В работе', dailySalesSum: (item.daily_sales_sum / 100).toFixed(2), dailySalesCount: item.daily_sales_count, lastSaleAgo: formatTimeAgo_(item.last_sale), state_mask: item.state_mask, last_sale: item.last_sale, rowClass: rowClass }; }); processed.sort((a, b) => { if (a.state_mask === 1 && b.state_mask !== 1) return -1; if (a.state_mask !== 1 && b.state_mask === 1) return 1; const dateA = a.last_sale ? new Date(a.last_sale) : new Date(0); const dateB = b.last_sale ? new Date(b.last_sale) : new Date(0); return dateA - dateB; }); return processed; }
+function formatTimeAgo_(isoDate) { if (!isoDate) return 'Продаж не было'; const saleDate = new Date(isoDate); const now = new Date(); let diff = Math.floor((now - saleDate) / 1000); if (diff < 60) return "менее минуты назад"; const d = Math.floor(diff / (24 * 60 * 60)); diff -= d * 24 * 60 * 60; const h = Math.floor(diff / (60 * 60)); diff -= h * 60 * 60; const m = Math.floor(diff / 60); let result = []; if (d > 0) result.push(`${d} д.`); if (h > 0) result.push(`${h} час.`); if (m > 0) result.push(`${m} мин.`); return result.length > 0 ? result.join(' ') + ' назад' : "только что"; }
+
+//------------------------------------------------------
+// Функции для работы с Google Sheets (кэш)
+//------------------------------------------------------
+function writeTableToSheet_(sheetName, headers, rows) { try { const ss = SpreadsheetApp.openById(SPREADSHEET_ID); let sheet = ss.getSheetByName(sheetName); if (!sheet) sheet = ss.insertSheet(sheetName); sheet.clearContents(); if (headers && headers.length > 0) { sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold"); } if (rows && rows.length > 0 && headers && headers.length > 0) { sheet.getRange(2, 1, rows.length, headers.length).setValues(rows); } const lastCol = headers ? headers.length : 0; sheet.getRange(1, lastCol + 2).setValue('Updated:'); sheet.getRange(1, lastCol + 3).setValue(new Date()).setNumberFormat("yyyy-mm-dd hh:mm:ss"); SpreadsheetApp.flush(); } catch (e) { Logger.log("Ошибка записи в Google Sheet '" + sheetName + "': " + e.toString() + "\nStack: " + e.stack); } }
+function readTableFromSheet_(sheetName) { try { const ss = SpreadsheetApp.openById(SPREADSHEET_ID); const sheet = ss.getSheetByName(sheetName); const emptyResult = { headers: ["Сообщение"], data: [["Кэш не найден или пуст."]], items_count: 0, page_number: 1, items_per_page: 0, from_cache: true }; if (!sheet) { Logger.log(`Лист '${sheetName}' пуст.`); return emptyResult; } const range = sheet.getDataRange(); if (!range) return emptyResult; const values = range.getValues(); if (!values || values.length === 0) { Logger.log(`Нет данных на листе '${sheetName}'.`); return emptyResult; } const headers = values.shift() || []; return {  headers: headers, data: values,  items_count: values.length, page_number: 1, items_per_page: values.length, from_cache: true  }; } catch (e) { Logger.log("Ошибка чтения из Google Sheet '" + sheetName + "': " + e.toString() + "\nStack: " + e.stack); return { headers: ["Ошибка"], data: [["Не удалось прочитать кэш: " + e.message]], items_count: 0, page_number: 1, items_per_page: 0, from_cache: true }; } }
+function getSalesFromSheet() { const cachedRawData = readTableFromSheet_('Sales'); if (cachedRawData && cachedRawData.data && cachedRawData.data.length > 0 && !(cachedRawData.data[0][0] && cachedRawData.data[0][0].startsWith("Кэш"))) { let totalOverallSum = 0; let totalCashSum = 0; let totalCashlessSum = 0; const sumIndex = cachedRawData.headers.indexOf("Сумма"); const cashSumIndex = cachedRawData.headers.indexOf("Нал"); const cashlessSumIndex = cachedRawData.headers.indexOf("Безнал"); cachedRawData.data.forEach(row => { if (sumIndex !== -1) totalOverallSum += parseFloat(String(row[sumIndex]).replace(/[^\d,.-]/g, '').replace(',', '.')) || 0; if (cashSumIndex !== -1) totalCashSum += parseFloat(String(row[cashSumIndex]).replace(/[^\d,.-]/g, '').replace(',', '.')) || 0; if (cashlessSumIndex !== -1) totalCashlessSum += parseFloat(String(row[cashlessSumIndex]).replace(/[^\d,.-]/g, '').replace(',', '.')) || 0; }); const totalRow = new Array(cachedRawData.headers.length).fill(''); totalRow[0] = "ИТОГО (из кэша)"; if (sumIndex !== -1) totalRow[sumIndex] = totalOverallSum.toLocaleString('ru-RU', {minimumFractionDigits: 2}); return { ...cachedRawData, data: [...cachedRawData.data, totalRow], total_overall_sum: totalOverallSum, total_cash_sum: totalCashSum, total_cashless_sum: totalCashlessSum  }; } return cachedRawData; }
+
+// --- Устаревшая функция, оставлена для совместимости ---
+function getApiData(params) { return updateDataEvents(params); }

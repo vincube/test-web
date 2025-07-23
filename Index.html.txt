@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+  <style>
+    body { padding: 1rem; background-color: #f8f9fa; }
+    .container-fluid { max-width: 1600px; }
+    .loader { text-align: center; padding: 2rem; }
+    .controls { background-color: #fff; padding: 1.5rem; border-radius: 0.5rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+    .form-label, .form-check-label { font-size: 1.05rem; }
+    .table-responsive { max-height: 80vh; }
+    #events-analytics-container, #sales-list-analytics-container { margin-top: 1rem; }
+    
+    /* Стили для сортировки */
+    .sortable { cursor: pointer; position: relative; padding-right: 20px; /* Отступ для стрелки */ }
+    .sortable::after {
+        content: '\00A0\2195'; /* Пробел + стрелка вверх-вниз (нейтральная) */
+        position: absolute;
+        right: 5px;
+        opacity: 0.3;
+        transition: opacity 0.2s, content 0.2s;
+    }
+    .sortable[data-sort-direction="asc"]::after { content: '\00A0\25B2'; opacity: 1; } /* Пробел + стрелка вверх */
+    .sortable[data-sort-direction="desc"]::after { content: '\00A0\25BC'; opacity: 1; } /* Пробел + стрелка вниз */
+
+    .table-light-brown {
+        --bs-table-bg: #f5eada;
+        --bs-table-border-color: #e0d1c1;
+    }
+
+    /* Адаптивность для мобильной кнопки фильтров */
+    @media (max-width: 991.98px) {
+        .filter-toggle-btn {
+            margin-bottom: 0.5rem; /* Отступ между кнопкой фильтра и началом фильтров */
+        }
+    }
+  </style>
+</head>
+<body>
+  <div class="container-fluid">
+    <h1 class="mb-4">Отчёты Vendista</h1>
+
+    <!-- Кнопка для сворачивания/разворачивания фильтров на мобильных -->
+    <button class="btn btn-outline-primary mb-3 d-lg-none w-100 filter-toggle-btn" type="button" data-bs-toggle="collapse" data-bs-target="#filterCollapse" aria-expanded="false" aria-controls="filterCollapse">
+        Фильтры ☰
+    </button>
+    
+    <!-- Общая панель фильтров -->
+    <div class="collapse d-lg-block" id="filterCollapse">
+        <div class="controls">
+            <div class="row g-3 align-items-end">
+                <div class="col-12 col-sm-6 col-lg-3">
+                    <label for="machineId" class="form-label">Автомат (поиск)</label>
+                    <select class="form-select" id="machineId" data-placeholder="Начните ввод или выберите"></select>
+                </div>
+                <div class="col-12 col-sm-6 col-lg-2">
+                    <label for="divisionId" class="form-label">Город (DivisionId)</label>
+                    <input type="text" class="form-control" id="divisionId" placeholder="ID города">
+                </div>
+                <div class="col-12 col-sm-6 col-lg-2">
+                    <label for="filterText" class="form-label">Фильтр</label>
+                    <input type="text" class="form-control" id="filterText" placeholder="Текст для фильтрации">
+                </div>
+                <div class="col-12 col-sm-6 col-lg-2">
+                    <label for="dateFrom" class="form-label">Период с:</label>
+                    <input type="date" class="form-control" id="dateFrom">
+                </div>
+                <div class="col-12 col-sm-6 col-lg-2">
+                    <label for="dateTo" class="form-label">Период до:</label>
+                    <input type="date" class="form-control" id="dateTo">
+                </div>
+            </div>
+        </div>
+    </div>
+    
+  <!-- Навигация по вкладкам и внешние ссылки -->
+    <nav>
+      <div class="nav nav-tabs" id="nav-tab" role="tablist">
+        <!-- Кнопка "Обновить" как вкладка -->
+        <a class="nav-link" href="#" id="nav-refresh-link">Обновить</a> 
+
+        <!-- Основные вкладки -->
+        <button class="nav-link active" id="nav-sales-tab" data-bs-toggle="tab" data-bs-target="#nav-sales" type="button" role="tab" aria-controls="nav-sales" aria-selected="true">Продажи (Сводка)</button>
+        <!-- НОВОЕ: Добавлена новая вкладка для списка продаж -->
+        <button class="nav-link" id="nav-sales-list-tab" data-bs-toggle="tab" data-bs-target="#nav-sales-list" type="button" role="tab" aria-controls="nav-sales-list" aria-selected="false">Продажи (Список)</button>
+        <button class="nav-link" id="nav-events-tab" data-bs-toggle="tab" data-bs-target="#nav-events" type="button" role="tab" aria-controls="nav-events" aria-selected="false">События</button>
+        <button class="nav-link" id="nav-refunds-tab" data-bs-toggle="tab" data-bs-target="#nav-refunds" type="button" role="tab" aria-controls="nav-refunds" aria-selected="false">Банк (возвраты)</button>
+        <button class="nav-link" id="nav-machines-tab" data-bs-toggle="tab" data-bs-target="#nav-machines" type="button" role="tab" aria-controls="nav-machines" aria-selected="false">Автоматы</button>
+        
+        <!-- Ссылки на внешние отчеты -->
+        <a class="nav-link" href="https://script.google.com/macros/s/AKfycbyJLoiBJwjZkoI_psx07l3uhTKqmtae9U-SLRrArJQ/dev" target="_blank" rel="noopener noreferrer">Управление товарами и журнал пакетов</a>
+        <a class="nav-link" href="https://script.google.com/macros/s/AKfycbxTZX9MwW3pnMajN24gQ6Rs_5gu2n134d3dsDBRFPQLFkIWUIUwYHHQV1pt6q32VhGG/exec" target="_blank" rel="noopener noreferrer">Управление автоматами (создание/ред.)</a>
+      </div>
+    </nav>              
+
+    <!-- Содержимое вкладок -->
+    <div class="tab-content pt-3" id="nav-tabContent">
+      <div class="tab-pane fade show active" id="nav-sales" role="tabpanel" aria-labelledby="nav-sales-tab"><div id="sales-result-container"></div></div>
+      
+      <!-- НОВОЕ: Контент для новой вкладки "Список Продаж" -->
+      <div class="tab-pane fade" id="nav-sales-list" role="tabpanel" aria-labelledby="nav-sales-list-tab">
+        <div class="controls bg-light p-3 rounded">
+            <div class="row g-3 align-items-center">
+                <div class="col-md-8">
+                    <label for="sellTypeFilter" class="form-label">Тип продажи</label>
+                    <select id="sellTypeFilter" class="form-select">
+                        <option value="all">Все данные</option>
+                        <option value="1">Продажа за нал</option>
+                        <option value="2">Продажа за безнал</option>
+                        <option value="3">Продажа за внешний кредит</option>
+                        <option value="4">Продажа за бонусы</option>
+                        <option value="98">Ошибка безнал(время)</option>
+                        <option value="99">Ошибка удаленная выдача(время)</option>
+                        <option value="97">Ошибка наличные (время)</option>
+                        <option value="88">Ошибка безнал(датчик)</option>
+                        <option value="89">Ошибка удаленная выдача(датчик)</option>
+                        <option value="87">Ошибка наличные (датчик)</option>
+                        <option value="90">Лимит времени</option>
+                        <option value="91">Внесено больше</option>
+                        <option value="992">Нет связи с банком</option>
+                    </select>
+                </div>
+                <div class="col-md-4 d-flex align-items-end">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" id="isReturnFilter">
+                        <label class="form-check-label" for="isReturnFilter">Только возвраты</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="form-check form-switch mb-3 mt-3">
+          <input class="form-check-input" type="checkbox" role="switch" id="showSalesListAnalyticsCheck">
+          <label class="form-check-label" for="showSalesListAnalyticsCheck">Показать/скрыть статистику</label>
+        </div>
+        <div id="sales-list-analytics-container" style="display: none;"></div>
+        <div id="sales-list-result-container" class="mt-3"></div>
+      </div>
+
+      <div class="tab-pane fade" id="nav-events" role="tabpanel" aria-labelledby="nav-events-tab">
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" role="switch" id="showEventsAnalyticsCheck">
+          <label class="form-check-label" for="showEventsAnalyticsCheck">Показать/скрыть статистику</label>
+        </div>
+        <div id="events-analytics-container" style="display: none;"></div>
+        <div id="events-result-container"></div>
+      </div>
+      <div class="tab-pane fade" id="nav-refunds" role="tabpanel" aria-labelledby="nav-refunds-tab">
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" role="switch" id="isRefundsOnlyFilter" checked>
+          <label class="form-check-label" for="isRefundsOnlyFilter">Только возвраты</label>
+        </div>
+        <div id="refunds-result-container"></div>
+      </div>
+      <div class="tab-pane fade" id="nav-machines" role="tabpanel" aria-labelledby="nav-machines-tab">
+          <div class="controls d-flex flex-wrap align-items-center justify-content-between">
+              <div>
+                  <strong class="me-3" style="font-size: 1.1rem;">Фильтры:</strong>
+                  <div class="form-check form-switch d-inline-block me-3 mb-2"> <input class="form-check-input filter-checkbox" type="checkbox" role="switch" id="showFailed" checked><label class="form-check-label" for="showFailed">⛔ Неработающие</label></div>
+                  <div class="form-check form-switch d-inline-block me-3 mb-2"> <input class="form-check-input filter-checkbox" type="checkbox" role="switch" id="showWarning" checked><label class="form-check-label" for="showWarning">⚠️ С проблемами (>48ч)</label></div>
+                  <div class="form-check form-switch d-inline-block me-3 mb-2"> <input class="form-check-input filter-checkbox" type="checkbox" role="switch" id="showWorking" checked><label class="form-check-label" for="showWorking">✅ В работе</label></div>
+              </div>
+              <div class="ms-auto mt-2 mt-md-0"><span id="lastUpdated" class="text-muted me-3"></span><button id="refreshMachinesBtn" class="btn btn-primary">Обновить</button></div>
+          </div>
+          <div id="loader-machines" class="loader"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Загрузка...</span></div><p class="mt-2">Получение данных...</p></div>
+          <div id="error-container-machines" class="alert alert-danger" style="display: none;"></div>
+          <div id="report-container-machines" class="table-responsive" style="display: none;">
+              <h5 class="mb-2">Найдено автоматов: <span id="total-count">0</span></h5>
+              <table id="machines-table" class="table table-striped table-bordered table-hover"><thead></thead><tbody></tbody></table>
+          </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+  <script>
+    let cachedSalesData = null;
+    let cachedEventsData = null;
+    let cachedRefundsData = null;
+    let cachedSalesListData = null; // НОВОЕ: Кэш для списка продаж
+    let machineList = []; 
+    const formatSum = (sum) => (typeof sum === 'number' ? sum : 0).toLocaleString('ru-RU', { minimumFractionDigits: 2 });
+
+    function showLoading(containerId) { document.getElementById(containerId).innerHTML = `<div class="loader"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Загрузка...</span></div><p class="mt-2">Получение данных...</p></div>`; }
+    function showError(error, containerId) { document.getElementById(containerId).innerHTML = `<div class="alert alert-danger">${error.message || 'Произошла неизвестная ошибка'}</div>`; }
+    
+    function renderTable(containerId, result, title) {
+        if (!result || !result.headers || !result.data) { showError({ message: "Получены некорректные данные" }, containerId); return; }
+        let html = `<h4 class="mt-2">${title}</h4>`;
+        if ((title === 'Отчет по продажам' || title === 'Список продаж') && result.total_overall_sum !== undefined) { // Изменено
+             html += `<p class="lead">Общая сумма: <strong>${formatSum(result.total_overall_sum)} ₽</strong>`;
+             if (title === 'Отчет по продажам') {
+                html += ` (Нал: ${formatSum(result.total_cash_sum)} ₽, Безнал: ${formatSum(result.total_cashless_sum)} ₽)`;
+             }
+             html += `</p>`;
+        } else if (title === 'Банк (возвраты)' && result.total_overall_sum !== undefined) {
+             const reportTitle = $('#isRefundsOnlyFilter').prop('checked') ? "Общая сумма возвратов:" : "Общая сумма поступлений по банку:";
+             html += `<p class="lead">${reportTitle} <strong>${formatSum(result.total_overall_sum)} ₽</strong></p>`;
+        }
+        html += `<div class="table-responsive"><table id="${containerId}-table" class="table table-striped table-bordered table-sm"><thead><tr><th style="width: 1%;">№</th>`;
+        result.headers.forEach(h => html += `<th class="sortable">${h}</th>`);
+        html += '</tr></thead><tbody>';
+        result.data.forEach((row, rowIndex) => {
+            const rowClass = result.rowClasses ? result.rowClasses[rowIndex] : '';
+            html += `<tr class="${rowClass}">`;
+            html += `<td>${(rowIndex + 1)}</td>`;
+            row.forEach(cell => html += `<td>${cell}</td>`);
+            html += '</tr>';
+        });
+        html += '</tbody></table></div>';
+        const container = document.getElementById(containerId);
+        container.innerHTML = html;
+        makeTableSortable(container.querySelector('table'));
+    }
+
+    function getSharedParams() { 
+        const machineData = $('#machineId').select2('data')[0];
+        return {
+            MachineId: machineData ? machineData.id : null,
+            TermId: machineData ? machineData.terminal_id : null,
+            DivisionId: $('#divisionId').val(), 
+            DateFrom: $('#dateFrom').val(), 
+            DateTo: $('#dateTo').val(), 
+            FilterText: $('#filterText').val()
+        }; 
+    }
+
+    function handleLoadSales() { showLoading('sales-result-container'); google.script.run.withSuccessHandler(result => { cachedSalesData = result; renderTable('sales-result-container', result, 'Отчет по продажам'); }).withFailureHandler(err => showError(err, 'sales-result-container')).updateDataSales(getSharedParams()); }
+    
+    function handleLoadSalesList() {
+      showLoading('sales-list-result-container');
+      const params = getSharedParams();
+      params.SellTypes = $('#sellTypeFilter').val();
+      params.IsReturn = $('#isReturnFilter').prop('checked');
+      
+      google.script.run
+        .withSuccessHandler(result => {
+          cachedSalesListData = result;
+          renderTable('sales-list-result-container', result, 'Список продаж');
+          if (result.analytics) {
+            $('#sales-list-analytics-container').html(renderSalesListAnalytics(result.analytics));
+            if ($('#showSalesListAnalyticsCheck').prop('checked')) {
+              $('#sales-list-analytics-container').show();
+            } else {
+              $('#sales-list-analytics-container').hide();
+            }
+          }
+        })
+        .withFailureHandler(err => showError(err, 'sales-list-result-container'))
+        .getSalesListData(params);
+    }
+
+    function handleLoadEvents() {
+      showLoading('events-result-container');
+      google.script.run.withSuccessHandler(result => {
+        cachedEventsData = result;
+        renderTable('events-result-container', result, 'Отчет по событиям');
+        if (result.analytics) {
+          $('#events-analytics-container').html(renderEventsAnalytics(result.analytics));
+          if ($('#showEventsAnalyticsCheck').prop('checked')) {
+            $('#events-analytics-container').show();
+          } else {
+            $('#events-analytics-container').hide();
+          }
+        }
+      }).withFailureHandler(err => showError(err, 'events-result-container')).updateDataEvents(getSharedParams());
+    }
+    function handleLoadRefunds() { 
+      showLoading('refunds-result-container');
+      const params = getSharedParams();
+      params.isRefundsOnly = $('#isRefundsOnlyFilter').prop('checked');
+      google.script.run.withSuccessHandler(result => {
+        cachedRefundsData = result;
+        renderTable('refunds-result-container', result, 'Банк (возвраты)');
+      }).withFailureHandler(err => showError(err, 'refunds-result-container')).updateDataRefunds(params);
+    }
+
+    function renderSalesListAnalytics(analytics) {
+        if (!analytics) return '';
+        const totals = analytics.totals;
+        let html = '<div class="row g-4">';
+
+        html += `<div class="col-12 col-md-6"><h5>Общая статистика по продажам</h5><ul class="list-group">
+                  <li class="list-group-item d-flex justify-content-between align-items-center fw-bold">Всего продаж (сумма): <strong>${formatSum(totals.total_sum)} ₽</strong></li>
+                  <li class="list-group-item d-flex justify-content-between align-items-center">Безналичные (сумма/кол-во): <span>${formatSum(totals.cashless_sum)} ₽ / ${totals.cashless_count} шт.</span></li>
+                  <li class="list-group-item d-flex justify-content-between align-items-center">Наличные (сумма/кол-во): <span>${formatSum(totals.cash_sum)} ₽ / ${totals.cash_count} шт.</span></li>
+                  <li class="list-group-item d-flex justify-content-between align-items-center">Внешний кредит (сумма/кол-во): <span>${formatSum(totals.credit_sum)} ₽ / ${totals.credit_count} шт.</span></li>
+                  <li class="list-group-item d-flex justify-content-between align-items-center">Бонусы (сумма/кол-во): <span>${formatSum(totals.bonus_sum)} ₽ / ${totals.bonus_count} шт.</span></li>
+                  <li class="list-group-item d-flex justify-content-between align-items-center text-danger">Возвраты (сумма/кол-во): <span>${formatSum(totals.return_sum)} ₽ / ${totals.return_count} шт.</span></li>
+                  <li class="list-group-item d-flex justify-content-between align-items-center text-warning">Ошибки (время): <span>${totals.error_99_count + totals.error_98_count + totals.error_97_count} шт.</span></li>
+                  <li class="list-group-item d-flex justify-content-between align-items-center text-warning">Ошибки (датчик): <span>${totals.error_89_count + totals.error_88_count + totals.error_87_count} шт.</span></li>
+                  <li class="list-group-item d-flex justify-content-between align-items-center text-info">Лимит времени: <span>${totals.error_90_count} шт.</span></li>
+                  <li class="list-group-item d-flex justify-content-between align-items-center text-info">Внесено больше: <span>${totals.error_91_count} шт.</span></li>
+                </ul></div>`;
+
+        html += `<div class="col-12 col-md-6"><h5>Топ-20 товаров</h5><div class="table-responsive" style="max-height: 300px;"><table class="table table-sm table-striped">
+                  <thead><tr><th>Товар</th><th>Кол-во</th><th>Сумма</th></tr></thead><tbody>`;
+        analytics.topProducts.forEach(p => {
+            html += `<tr><td>${p.name}</td><td>${p.count}</td><td>${formatSum(p.sum)} ₽</td></tr>`;
+        });
+        html += '</tbody></table></div></div>';
+        
+        html += '</div>';
+        return html;
+    }
+
+    function renderEventsAnalytics(analytics) { 
+        if (!analytics) return ''; 
+        let html = '<div class="row g-4">'; 
+
+        html += `<div class="col-12 col-md-4"><h5>Общая статистика</h5><ul class="list-group">
+                  <li class="list-group-item d-flex justify-content-between align-items-center">Всего продаж: <strong>${formatSum(analytics.totals.total)} ₽</strong></li>
+                  <li class="list-group-item d-flex justify-content-between align-items-center">Наличные: <span>${formatSum(analytics.totals.cash)} ₽</span></li>
+                  <li class="list-group-item d-flex justify-content-between align-items-center">Безналичные: <span>${formatSum(analytics.totals.cashless)} ₽</span></li>
+                </ul></div>`;
+
+        html += `<div class="col-12 col-md-4"><h5>Топ-20 товаров</h5><div class="table-responsive"><table class="table table-sm">
+                  <thead><tr><th>Товар</th><th>Кол-во</th><th>Сумма</th></tr></thead><tbody>`;
+        analytics.topProducts.forEach(p => {
+            html += `<tr><td>${p.name}</td><td>${p.count}</td><td>${formatSum(p.sum)} ₽</td></tr>`;
+        });
+        html += '</tbody></table></div></div>';
+        
+        html += `<div class="col-12 col-md-4"><h5>Сводка по событиям</h5><div class="table-responsive"><table class="table table-sm">
+                  <thead><tr><th>Событие</th><th>Кол-во</th><th>Сумма</th></tr></thead><tbody>`;
+        analytics.eventTypes.forEach(e => {
+            html += `<tr><td>${e.name}</td><td>${e.count}</td><td>${e.sum > 0 ? formatSum(e.sum) + ' ₽' : '-'}</td></tr>`;
+        });
+        html += '</tbody></table></div></div>';
+
+        html += '</div>';
+        return html; 
+    }
+
+    function loadMachinesReport() { $('#loader-machines').show(); $('#report-container-machines, #error-container-machines').hide(); $('#refreshMachinesBtn').prop('disabled', true); const filters = { showWorking: $('#showWorking').prop('checked'), showWarning: $('#showWarning').prop('checked'), showFailed: $('#showFailed').prop('checked') }; google.script.run.withSuccessHandler(showMachinesReport).withFailureHandler(showMachinesError).getMachineData(filters); }
+    function showMachinesReport(responseString) { $('#loader-machines').hide(); $('#refreshMachinesBtn').prop('disabled', false); const response = JSON.parse(responseString); if (!response.success) { showMachinesError({ message: response.error }); return; } const items = response.items; const table = $('#machines-table'); table.find('thead, tbody').empty(); $('#total-count').text(response.total); table.find('thead').html('<tr><th class="sortable" style="width: 1%;">№</th><th class="sortable">Автомат / Адрес</th><th class="sortable">Состояние</th><th class="sortable text-end">Продажи (сегодня)</th><th class="sortable">Последняя продажа</th></tr>'); const tableBody = table.find('tbody'); if (items.length === 0) { tableBody.html('<tr><td colspan="5" class="text-center">Автоматы по заданным фильтрам не найдены.</td></tr>'); } else { items.forEach((item, index) => { tableBody.append(`<tr class="${item.rowClass}"><td>${index + 1}</td><td class="machine-cell">${item.name}<br><small>${item.address}</small></td><td>${item.statusText}</td><td class="sales-cell"><strong>${item.dailySalesSum} ₽</strong><br><small>${item.dailySalesCount} шт.</small></td><td>${item.lastSaleAgo}</td></tr>`); }); } $('#report-container-machines').show(); $('#lastUpdated').text(`Обновлено: ${new Date().toLocaleTimeString()}`); makeTableSortable(table[0]); }
+    function showMachinesError(error) { $('#loader-machines').hide(); $('#refreshMachinesBtn').prop('disabled', false); $('#error-container-machines').text('Произошла ошибка: ' + error.message).show(); }
+    
+    function parseCellForSort(text) { 
+        const dateMatch = text.match(/(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})/); 
+        if (dateMatch) return new Date(dateMatch[0]).getTime(); 
+        const num = parseFloat(text.replace(/[₽\s]/g, '').replace(',', '.')); 
+        return isNaN(num) ? text.toLowerCase() : num; 
+    }
+    function makeTableSortable(table) {
+        if (!table) return;
+        const headers = table.querySelectorAll('th.sortable');
+        headers.forEach((header, index) => {
+            header.addEventListener('click', () => {
+                const tbody = table.querySelector('tbody');
+                if (!tbody) return; 
+                const rows = Array.from(tbody.querySelectorAll('tr'));
+                const totalRow = rows.find(r => r.classList.contains('table-info'));
+                const dataRows = totalRow ? rows.filter(r => !r.classList.contains('table-info')) : rows;
+                
+                headers.forEach(h => {
+                    if (h !== header) {
+                        delete h.dataset.sortDirection;
+                    }
+                });
+
+                const currentDirection = header.dataset.sortDirection;
+                const newDirection = currentDirection === 'asc' ? 'desc' : 'asc';
+                header.dataset.sortDirection = newDirection;
+
+                dataRows.sort((a, b) => {
+                    const cellIndexToCompare = index + 1; 
+                    const valA = parseCellForSort(a.cells[cellIndexToCompare].innerText);
+                    const valB = parseCellForSort(b.cells[cellIndexToCompare].innerText);
+
+                    if (valA < valB) return newDirection === 'asc' ? -1 : 1;
+                    if (valA > valB) return newDirection === 'asc' ? 1 : -1;
+                    return 0;
+                });
+                
+                tbody.innerHTML = '';
+                dataRows.forEach(row => tbody.appendChild(row));
+                if (totalRow) tbody.appendChild(totalRow);
+            });
+        });
+    }
+
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const today = new Date().toISOString().split('T')[0];
+        $('#dateFrom').val(today);
+        $('#dateTo').val('');
+        
+        $('#machineId').select2({
+            theme: "bootstrap-5",
+            allowClear: true,
+            placeholder: "Начните ввод или выберите",
+            dropdownParent: $('#filterCollapse'),
+            ajax: {
+                transport: (params, success, failure) => {
+                    if (machineList.length === 0) {
+                        google.script.run
+                            .withSuccessHandler(data => {
+                                if (data.error) {
+                                    failure(data.error);
+                                } else {
+                                    machineList = data;
+                                    success({ results: machineList });
+                                }
+                            })
+                            .withFailureHandler(failure)
+                            .getMachinesList();
+                    } else {
+                        success({ results: machineList });
+                    }
+                },
+                processResults: (data, params) => {
+                    params.term = params.term || '';
+                    const filtered = data.results.filter(item => {
+                        const searchLower = params.term.toLowerCase();
+                        return (item.text && item.text.toLowerCase().includes(searchLower));
+                    });
+                    return { results: filtered };
+                },
+                cache: true
+            }
+        });
+
+        $('#sellTypeFilter').select2({
+            theme: "bootstrap-5",
+            placeholder: "Выберите тип продаж",
+            dropdownParent: $('#nav-sales-list .controls')
+        });
+
+        // Предзагрузка
+        handleLoadSales(); 
+        handleLoadEvents();
+        handleLoadRefunds();
+        handleLoadSalesList(); // НОВОЕ: Загрузка списка продаж при старте
+        loadMachinesReport();
+
+        // Обработчик для кнопки "Обновить"
+        $('#nav-refresh-link').on('click', (e) => { 
+            e.preventDefault();
+            const activeTabId = $('.nav-link.active[data-bs-toggle="tab"]').attr('id');
+            if (activeTabId === 'nav-sales-tab') {
+                handleLoadSales();
+            } else if (activeTabId === 'nav-sales-list-tab') { // НОВОЕ
+                handleLoadSalesList();
+            } else if (activeTabId === 'nav-events-tab') {
+                handleLoadEvents();
+            } else if (activeTabId === 'nav-refunds-tab') {
+                handleLoadRefunds();
+            } else if (activeTabId === 'nav-machines-tab') {
+                loadMachinesReport();
+            }
+        });
+        
+        // НОВОЕ: Обработчик для кнопки обновления на вкладке "Список продаж"
+        $('#sellTypeFilter, #isReturnFilter').on('change', handleLoadSalesList);
+        $('#isRefundsOnlyFilter').on('change', handleLoadRefunds);
+
+        $('#showEventsAnalyticsCheck').on('change', function() { $('#events-analytics-container').toggle(this.checked); });
+        $('#showSalesListAnalyticsCheck').on('change', function() { $('#sales-list-analytics-container').toggle(this.checked); });
+        $('#refreshMachinesBtn').on('click', loadMachinesReport);
+        $('.filter-checkbox').on('change', loadMachinesReport);
+
+        $('button[data-bs-toggle="tab"]').on('shown.bs.tab', function(e) {
+            const targetId = $(e.target).attr("aria-controls");
+            if (targetId === 'nav-sales') { 
+                if (cachedSalesData) renderTable('sales-result-container', cachedSalesData, 'Отчет по продажам'); 
+            } else if (targetId === 'nav-sales-list') { // НОВОЕ
+                if (cachedSalesListData) {
+                    renderTable('sales-list-result-container', cachedSalesListData, 'Список продаж');
+                    if (cachedSalesListData.analytics) $('#sales-list-analytics-container').html(renderSalesListAnalytics(cachedSalesListData.analytics));
+                } else {
+                    handleLoadSalesList();
+                }
+            } else if (targetId === 'nav-events') { 
+                if (cachedEventsData) {
+                    renderTable('events-result-container', cachedEventsData, 'Отчет по событиям'); 
+                    if (cachedEventsData.analytics) $('#events-analytics-container').html(renderEventsAnalytics(cachedEventsData.analytics));
+                }
+            } else if (targetId === 'nav-refunds') {
+                if (cachedRefundsData) renderTable('refunds-result-container', cachedRefundsData, 'Банк (возвраты)');
+                else handleLoadRefunds();
+            }
+        });
+    });
+  </script>
+</body>
+</html>

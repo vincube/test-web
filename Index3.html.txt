@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!-- ... (head секция без изменений) ... -->
+  <title>Управление товарами и журнал пакетов</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    /* ... (CSS без изменений) ... */
+    :root {
+      --primary-color: #007bff; --primary-hover-color: #0056b3; --secondary-color: #6c757d;
+      --success-color: #28a745; --success-hover-color: #1e7e34; --danger-color: #dc3545;
+      --warning-color: #ffc107; --info-color: #17a2b8; --light-color: #f8f9fa;
+      --dark-color: #343a40; --text-color: #212529; --label-color: #495057;
+      --border-color: #ced4da; --input-bg-color: #fff; --surface-color: #fff;
+      --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --border-radius: 0.3rem; --box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075);
+    }
+    * { box-sizing: border-box; }
+    body { font-family: var(--font-family); background-color: var(--light-color); margin: 0; color: var(--text-color); font-size: 0.95rem; line-height: 1.55; }
+    .container-main { max-width: 1024px; margin: 0 auto; padding: 1.5rem 1rem; }
+    h1 { font-size: 1.6em; margin-bottom: 0.5rem; color: var(--dark-color); text-align: center; font-weight: 500; }
+    #remoteReportStatusDisplay { font-size: 0.85em; text-align: center; margin-bottom: 1rem; color: var(--secondary-color); padding: 0.3rem; background-color: #e9ecef; border-radius: var(--border-radius); min-height: 1.5em; }
+    .filters-area { background: var(--surface-color); padding: 1.25rem; border-radius: var(--border-radius); box-shadow: var(--box-shadow); margin-bottom: 1.5rem; display: flex; flex-direction: column; gap: 1rem; }
+    .filters-row { display: flex; flex-wrap: wrap; gap: 0.8rem; align-items: flex-end;  }
+    .filters-row .filter-cell { display: flex; flex-direction: column; }
+    .filters-row.top-controls-row .terminal-filter { flex-grow: 1.5; min-width: 170px; flex-basis: 0; }
+    .filters-row.top-controls-row .token-filter { flex-grow: 1.5;  min-width: 170px; flex-basis: 0; }
+    .filters-row.top-controls-row .product-issue-filter { flex-grow: 2; min-width: 260px; flex-basis: 0;}
+    .product-issue-filter .input-group { display: flex; align-items: center; }
+    .product-issue-filter .products-dropdown-wrapper { flex-grow: 1; min-width: 0; }
+    .product-issue-filter .btn { margin-left: 0.5rem; flex-shrink: 0; }
+    .filters-row.command-send-row .filter-cell { flex-grow: 1; width: 100%; }
+    .command-send-row-content { display: flex; width: 100%; gap: 0.5rem; align-items: flex-end; }
+    .command-send-row-content .input-and-send-group { display: flex; flex-grow: 1; align-items: flex-end; min-width: 0; }
+    .command-send-row-content .input-and-send-group input[type="text"] { flex-grow: 1; min-width: 150px; }
+    .command-send-row-content .input-and-send-group .btn { margin-left: 0.5rem; flex-shrink: 0; }
+    .command-send-row-content .btn-check-status { flex-shrink: 0; }
+    .filter-label { font-size: 0.85em; color: var(--label-color); font-weight: 500; margin-bottom: 0.3rem; }
+    .input-group { position: relative; display: flex; align-items: center; width: 100%; }
+    input[type="text"], input[type="number"], .dropdown-input, .products-input { flex-grow: 1; padding: 0.4rem 0.8rem; border: 1px solid var(--border-color); border-radius: var(--border-radius); background: var(--input-bg-color); font-size: 0.9em; transition: border-color 0.2s, box-shadow 0.2s; min-width: 0; outline: none; }
+    input[type="text"]:focus, input[type="number"]:focus, .dropdown-input:focus, .products-input:focus { border-color: var(--primary-color); box-shadow: 0 0 0 0.15rem rgba(0,123,255,0.25); }
+    input[type="text"].products-input { background-color: #e9ecef; }
+    .dropdown-btn, .products-dropdown-btn { position: absolute; right: 1px; top: 1px; bottom: 1px; background: #f0f0f0; border: none; border-left: 1px solid var(--border-color); border-radius: 0 var(--border-radius) var(--border-radius) 0; cursor: pointer; font-size: 1em; color: var(--secondary-color); width: 34px; z-index: 2; display: flex; align-items: center; justify-content: center; transition: background-color 0.2s; }
+    .dropdown-btn:hover, .products-dropdown-btn:hover { color: var(--primary-color); background-color: #e0e0e0; }
+    .dropdown-menu { position: absolute; top: calc(100% + 3px); left: 0; width: 100%; background: var(--surface-color); border: 1px solid var(--border-color); border-radius: var(--border-radius); box-shadow: 0 0.4rem 0.8rem rgba(0,0,0,0.12); display: none; max-height: 200px; overflow-y: auto; z-index: 1000; font-size: 0.9em; }
+    .dropdown-item { padding: 0.5rem 0.8rem; border-bottom: 1px solid #eee; cursor: pointer; transition: background-color 0.15s; word-break: break-word; }
+    .dropdown-item:last-child { border-bottom: none; } .dropdown-item:hover { background-color: #e9ecef; }
+    .dropdown-item.no-results, .dropdown-item.clear-selection { color: var(--secondary-color); }
+    .dropdown-item.clear-selection:hover { background-color: #e9ecef; }
+    .products-dropdown-wrapper { position: relative; display: flex; align-items: center; flex-grow: 1; }
+    .btn { padding: 0.4rem 0.8rem; border: 1px solid transparent; border-radius: var(--border-radius); cursor: pointer; font-size: 0.9em; font-weight: 500; color: #fff; transition: background-color 0.18s, transform 0.12s, box-shadow 0.18s; text-align: center; line-height: 1.5; white-space: nowrap; }
+    .btn:disabled { opacity: 0.65; cursor: not-allowed; }
+    .btn-primary { background-color: var(--primary-color); border-color: var(--primary-color); } .btn-primary:hover:not(:disabled) { background-color: var(--primary-hover-color); border-color: var(--primary-hover-color); }
+    .btn-success { background-color: var(--success-color); border-color: var(--success-color); } .btn-success:hover:not(:disabled) { background-color: var(--success-hover-color); border-color: var(--success-hover-color); }
+    .btn-info { background-color: var(--info-color); border-color: var(--info-color); } .btn-info:hover:not(:disabled) { background-color: #117a8b; border-color: #10707f;}
+    .btn-secondary { background-color: var(--secondary-color); border-color: var(--secondary-color); } .btn-secondary:hover:not(:disabled) { background-color: #545b62; border-color: #4e555b;}
+    .btn-warning { background-color: var(--warning-color); border-color: var(--warning-color); color: #212529;} .btn-warning:hover:not(:disabled) { background-color: #e0a800; border-color: #d39e00;}
+    .btn:active:not(:disabled) { transform: translateY(1px); }
+    .action-btn-container { display: flex; justify-content: center; gap: 6px; margin: 1.25rem 0; flex-wrap: wrap; }
+    .btn.action-btn { 
+        padding: 0.35rem 0.65rem; 
+        font-size: 0.80em;   
+        font-weight: 500; 
+        margin-bottom: 5px; 
+    }
+    .packet-section { background: var(--surface-color); border-radius: var(--border-radius); box-shadow: var(--box-shadow); padding: 1.5rem; margin: 0 auto 1.5rem auto; }
+    #productDataTable { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.88em; }
+    #productDataTable th, #productDataTable td { border: 1px solid var(--border-color); padding: 0.5rem 0.6rem; text-align: left; vertical-align: middle; }
+    #productDataTable th { background-color: #f2f2f2; font-weight: 600; white-space: nowrap; }
+    #productDataTable td input[type="number"] { width: 100%; padding: 0.25rem 0.4rem; font-size: 1em; text-align: right; border-radius: var(--border-radius); border: 1px solid var(--border-color); }
+    #productDataTable td:nth-child(1) { text-align: center; width: 50px; }
+    #productDataTable td:nth-child(2) { min-width: 140px; }
+    #productDataTable td:nth-child(3) { width: 80px; }
+    #productDataTable td:nth-child(4) { width: 80px; }
+    #productDataTable td:nth-child(5) { text-align: center; width: 70px; }
+    #productDataTable td:nth-child(6) { text-align: center; width: 90px; }
+    #productDataTable td:nth-child(7) { width: 110px; }
+    .packet-section > form { width: 100%; }
+    .other-params-container { display: flex; flex-wrap: wrap; gap: 0.8rem 1.25rem; margin-top: 1.25rem; margin-bottom: 0.8rem; padding-top: 0.8rem; border-top: 1px solid #eee; }
+    .other-params-container label { display: flex; align-items: center; gap: 0.4rem; color: var(--text-color); font-weight: 400; }
+    .other-params-container input[type="number"] { width: 85px; padding: 0.3rem 0.5rem; font-size: 0.9em; }
+    .packet-footer { margin-top: 1.25rem; padding-top: 0.8rem; border-top: 1px solid #eee; display: flex; flex-direction: column; align-items: center; gap: 0.7rem; }
+    .packet-time { font-size: 0.9em; color: var(--secondary-color); font-weight: 500; }
+    .status-message-bar { padding: 0.6rem 1rem; margin-bottom: 0.8rem; border: 1px solid transparent; border-radius: var(--border-radius); font-weight: 500; text-align: center; font-size: 0.9em; }
+    .status-message-bar.hidden { display: none; } .status-message-bar.success { color: #155724; background-color: #d4edda; border-color: #c3e6cb; }
+    .status-message-bar.error { color: #721c24; background-color: #f8d7da; border-color: #f5c6cb; } .status-message-bar.info { color: #0c5460; background-color: #d1ecf1; border-color: #bee5eb; }
+    .status-message-bar.warning { color: #856404; background-color: #fff3cd; border-color: #ffeeba; }
+    .progress-bar-container { width: 100%; height: 20px; background-color: #e9ecef; border-radius: var(--border-radius); overflow: hidden; position: relative; border: 1px solid #ccc; }
+    .progress-bar-fill { height: 100%; background-color: var(--success-color); transition: width 0.3s ease-in-out; display: flex; align-items: center; justify-content: center; color: white; font-weight: 500; font-size: 0.8em; }
+    #allMachinesReportContainer .machine-report-block { background: var(--surface-color); border-radius: var(--border-radius); box-shadow: var(--box-shadow); padding: 1.5rem; margin-bottom: 2rem; }
+    #allMachinesReportContainer .machine-title { font-size: 1.3em; color: var(--dark-color); margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--primary-color); }
+    #allMachinesReportContainer .product-table-readonly { width:100%; border-collapse: collapse; margin-top:10px; font-size:0.9em; }
+    #allMachinesReportContainer .product-table-readonly th, 
+    #allMachinesReportContainer .product-table-readonly td { border: 1px solid var(--border-color); padding: 0.4rem 0.5rem; text-align: left; vertical-align: middle;}
+    #allMachinesReportContainer .product-table-readonly th { background-color: #f2f2f2; font-weight: 600; white-space: nowrap; }
+    #allMachinesReportContainer .product-table-readonly td:nth-child(1) { text-align: center; width: 50px; }
+    #allMachinesReportContainer .product-table-readonly td:nth-child(3) { width: 80px; text-align: right; }
+    #allMachinesReportContainer .product-table-readonly td:nth-child(4) { width: 80px; text-align: right; }
+    #allMachinesReportContainer .product-table-readonly td:nth-child(5) { text-align: center; width: 70px; }
+    #allMachinesReportContainer .product-table-readonly td:nth-child(6) { text-align: center; width: 90px; }
+    #allMachinesReportContainer .product-table-readonly td:nth-child(7) { width: 110px; }
+    #allMachinesReportContainer .other-params-readonly { font-size: 0.9em; color: var(--secondary-color); margin-top: 1rem; }
+    #allMachinesReportContainer .other-params-readonly span { font-weight: 500; color: var(--text-color); }
+    #allMachinesReportContainer .fetch-log-display { font-size:0.8em; color:grey; margin-bottom:8px; padding: 5px; background-color: #f9f9f9; border-left: 3px solid var(--info-color); }
+    #salesDebugTableContainer { margin-top: 1rem; padding: 0.5rem; border: 1px dashed #ccc; background-color: #fafafa; max-height: 200px; overflow-y: auto; }
+    #salesDebugTableContainer table { width: 100%; font-size: 0.8em; border-collapse: collapse;}
+    #salesDebugTableContainer th, #salesDebugTableContainer td { border: 1px solid #ddd; padding: 3px; text-align: left;}
+    #salesDebugTableContainer th { background-color: #eee;}
+    .filter-options { margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem; font-size: 0.85em; }
+
+
+    @media (max-width: 1024px) {
+      .btn.action-btn { 
+        padding: 0.35rem 0.7rem; 
+        font-size: 0.82em; 
+      }
+    }
+    @media (max-width: 992px) { .filters-row.top-controls-row .filter-cell, .filters-row.top-controls-row .product-issue-filter { flex-basis: 100%; width: 100%; } .product-issue-filter .input-group { flex-direction: column; align-items: stretch; gap: 0.5rem; } .product-issue-filter .btn { margin-left: 0;} .action-btn-container { justify-content: space-around; } }
+    @media (max-width: 768px) { 
+        .command-send-row-content {flex-direction: column; align-items: stretch;} 
+        .command-send-row-content .input-and-send-group { width: 100%;} 
+        .command-send-row-content .input-and-send-group .btn {margin-left: 0; margin-top: 0.5rem;} 
+        .command-send-row-content .btn-check-status {width: 100%; margin-top: 0.5rem;} 
+        #productDataTable th, #productDataTable td { padding: 0.4rem; font-size: 0.85em;} 
+        #productDataTable td input[type="number"] { width: 65px; } 
+        #productDataTable td:nth-child(1) { width: 45px; } 
+        #productDataTable td:nth-child(2) { min-width: 100px; } 
+        #productDataTable td:nth-child(3) { width: 60px; } 
+        #productDataTable td:nth-child(4) { width: 60px; } 
+        #productDataTable td:nth-child(5) { width: 50px; } 
+        #productDataTable td:nth-child(6) { width: 70px; } 
+        #productDataTable td:nth-child(7) { width: 90px; } 
+        .btn.action-btn { font-size: 0.78em; padding: 0.28rem 0.55rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container-main">
+    <h1>Управление товарами и журнал пакетов</h1>
+    <div id="remoteReportStatusDisplay">Статус удаленного отчета не определен.</div>
+    <div id="globalStatusMessage" class="status-message-bar hidden"></div>
+    <div class="filters-area">
+        <!-- ... (фильтры без изменений) ... -->
+        <div class="filters-row top-controls-row">
+            <div class="filter-cell terminal-filter"> <label class="filter-label" for="terminalIdInput">ID терминала</label> <div class="input-group"> <input type="text" id="terminalIdInput" class="dropdown-input" placeholder="Начните ввод..." autocomplete="off"> <button type="button" id="terminalDropdownBtn" class="dropdown-btn" aria-expanded="false" aria-controls="machineDropdownMenu">▼</button> <div id="machineDropdownMenu" class="dropdown-menu"></div> </div> </div>
+            <div class="filter-cell token-filter"> <label class="filter-label" for="tokenInput">Токен*</label> <input type="text" id="tokenInput" placeholder="Токен" autocomplete="off"> </div>
+            <div class="filter-cell product-issue-filter"> <label class="filter-label" for="productInput">Товар</label> <div class="input-group"> <div class="products-dropdown-wrapper"> <input type="text" id="productInput" class="products-input" placeholder="Выберите товар..." autocomplete="off" readonly> <button type="button" id="productDropdownBtn" class="products-dropdown-btn" aria-expanded="false" aria-controls="productsDropdownMenu">▼</button> <div id="productsDropdownMenu" class="dropdown-menu"></div> </div> <button type="button" id="issueProductBtn" class="btn btn-success">Выдать товар</button> </div> </div>
+        </div>
+        <div class="filters-row command-send-row">
+            <div class="filter-cell">
+                <label class="filter-label" for="strParameter1Input">Параметр 1 (для команды)</label>
+                <div class="command-send-row-content">
+                    <div class="input-and-send-group">
+                        <input type="text" id="strParameter1Input" placeholder="Данные...">
+                        <button id="sendCommandBtn" class="btn btn-primary">Отправить</button>
+                    </div>
+                    <button id="checkStatusCommandBtn" class="btn btn-info btn-check-status">Проверить состояние ({zapros})</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="action-btn-container">
+        <button id="updateReportBtn" class="btn btn-primary action-btn">Обновить с API (выбранный)</button>
+        <button id="loadFromSheetBtn" class="btn btn-info action-btn">Загрузить ВСЕ из Таблицы</button>
+        <button id="fetchAllMachinesReportBtn" class="btn btn-secondary action-btn">Отчет по всем (в браузере)</button>
+        <button id="startRemoteReportBtn" class="btn btn-warning action-btn">Отчет в Google Таблицу</button>
+        <button id="saveAllMachinesToCsvBtn" class="btn btn-success action-btn" style="display: none;">Сохранить всё в CSV</button>
+    </div>
+    <div class="filter-options" id="loadFromSheetFilterOptions" style="justify-content: center; margin-bottom: 1rem; display: none;"> 
+        <label for="filterOnlyErrorsSheet">
+            <input type="checkbox" id="filterOnlyErrorsSheet"> Только с ошибками
+        </label>
+    </div>
+    <div id="salesDebugTableContainer" style="display: none;"> 
+        <h4>Полученные продажи (отладка):</h4>
+        <table id="salesDebugTable">
+            <thead><tr><th>ID</th><th>Товар</th><th>Время</th><th>Цена (руб)</th><th>Кол-во</th></tr></thead>
+            <tbody></tbody>
+        </table>
+    </div>
+    <div id="allMachinesReportContainer" style="margin-top: 20px;"></div>
+    <div id="packetFormContainer"> </div>
+  </div>
+
+  <script>
+    const terminalIdInput = document.getElementById('terminalIdInput');
+    const terminalDropdownBtn = document.getElementById('terminalDropdownBtn');
+    const machineDropdownMenu = document.getElementById('machineDropdownMenu');
+    const tokenInput = document.getElementById('tokenInput');
+    const productInput = document.getElementById('productInput');
+    const productDropdownBtn = document.getElementById('productDropdownBtn');
+    const productsDropdownMenu = document.getElementById('productsDropdownMenu');
+    const issueProductBtn = document.getElementById('issueProductBtn');
+    const strParameter1Input = document.getElementById('strParameter1Input');
+    const sendCommandBtn = document.getElementById('sendCommandBtn');
+    const updateReportBtn = document.getElementById('updateReportBtn');
+    const loadFromSheetBtn = document.getElementById('loadFromSheetBtn');
+    const packetFormContainer = document.getElementById('packetFormContainer');
+    const globalStatusMessage = document.getElementById('globalStatusMessage');
+    const checkStatusCommandBtn = document.getElementById('checkStatusCommandBtn');
+    const fetchAllMachinesReportBtn = document.getElementById('fetchAllMachinesReportBtn');
+    const allMachinesReportContainer = document.getElementById('allMachinesReportContainer');
+    const saveAllMachinesToCsvBtn = document.getElementById('saveAllMachinesToCsvBtn');
+    const startRemoteReportBtn = document.getElementById('startRemoteReportBtn');
+    const remoteReportStatusDisplay = document.getElementById('remoteReportStatusDisplay');
+    const salesDebugTableContainer = document.getElementById('salesDebugTableContainer');
+    const salesDebugTableBody = document.querySelector('#salesDebugTable tbody');
+    const loadFromSheetFilterOptions = document.getElementById('loadFromSheetFilterOptions'); 
+    const filterOnlyErrorsSheetCheckbox = document.getElementById('filterOnlyErrorsSheet'); 
+
+
+    let machineListData = [];
+    let currentProductMatrix = [];
+    let originalPacketData = {};
+    let originalTimestamp = null;
+    let autoUpdateCounter = 0;
+    const MAX_AUTO_UPDATE_ATTEMPTS = 5; 
+    const AUTO_UPDATE_INTERVAL = 3000; 
+    let autoUpdateTimeoutId = null;
+    let isFetchingAllMachines = false;
+    let remoteReportStatusIntervalId = null; 
+
+    const VENDISTA_API_TOKEN_CONST = "fe38f8470367451f81228617";
+    const NUM_SLOTS = 12;
+
+    let salesCheckPollIntervalId = null;
+    const SALES_CHECK_POLL_TIME_MS = 3000;
+    const SALES_CHECK_MAX_ATTEMPTS = 5; 
+    
+    let allMachinesDataFromSheetCache = []; 
+
+    // --- Вспомогательные функции ---
+    // ... (hideGlobalStatus, hideFormStatusMessage, showStatus, setLoadingState, formatTime, toggleDropdown, hideDropdown - БЕЗ ИЗМЕНЕНИЙ) ...
+    function hideGlobalStatus() { 
+        if (globalStatusMessage.timeoutId) clearTimeout(globalStatusMessage.timeoutId);
+        globalStatusMessage.classList.add('hidden');
+    }
+    function hideFormStatusMessage() {
+        const formStatus = packetFormContainer.querySelector('.status-message-bar');
+        if (formStatus) {
+            formStatus.remove();
+        }
+    }
+    function showStatus(message, type = 'info', duration = 5000, keepExisting = false) { 
+        if (!keepExisting) {
+            hideGlobalStatus(); 
+        }
+        console.log(`Status (${type}): ${message}`);
+        globalStatusMessage.textContent = message;
+        globalStatusMessage.className = `status-message-bar ${type}`;
+        globalStatusMessage.classList.remove('hidden');
+        if (globalStatusMessage.timeoutId) clearTimeout(globalStatusMessage.timeoutId); 
+        if (duration > 0) {
+             globalStatusMessage.timeoutId = setTimeout(() => {
+                globalStatusMessage.classList.add('hidden');
+            }, duration);
+        }
+    }
+    function setLoadingState(isLoading, buttonElement = null, loadingText = 'Загрузка...') { 
+        hideGlobalStatus(); 
+        hideFormStatusMessage(); 
+        if (buttonElement) {
+            buttonElement.disabled = isLoading;
+            if (isLoading) {
+                buttonElement.dataset.originalText = buttonElement.textContent;
+                buttonElement.textContent = loadingText;
+            } else if (buttonElement.dataset.originalText) {
+                buttonElement.textContent = buttonElement.dataset.originalText;
+                delete buttonElement.dataset.originalText;
+            }
+        }
+        document.body.style.cursor = isLoading ? 'wait' : 'default';
+    }
+    function formatTime(timeStr) { 
+        if (!timeStr) return "неизвестно";
+        try {
+            const d = new Date(timeStr);
+            if (isNaN(d.getTime())) return timeStr;
+            if (d.getTime() === 0 || (d.getUTCFullYear() === 1970 && d.getUTCMonth() === 0 && d.getUTCDate() === 1)) {
+                 if (timeStr.includes("0001-01-01") || timeStr.includes("1970-01-01T00:00:00")) return "неизвестно";
+            }
+            const z = n => String(n).padStart(2, '0');
+            return `${z(d.getDate())}.${z(d.getMonth() + 1)}.${d.getFullYear()} ${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}`;
+        } catch (e) {
+            return timeStr;
+        }
+    }
+    function toggleDropdown(dropdownMenu, button) { 
+        hideGlobalStatus(); hideFormStatusMessage();
+        const isExpanded = dropdownMenu.style.display === 'block';
+        dropdownMenu.style.display = isExpanded ? 'none' : 'block';
+        button.setAttribute('aria-expanded', String(!isExpanded));
+    }
+    function hideDropdown(dropdownMenu, button) { 
+        if (dropdownMenu && button) {
+            dropdownMenu.style.display = 'none';
+            button.setAttribute('aria-expanded', 'false');
+        }
+    }
+
+    function fetchRemoteReportStatusAndUpdateDisplay(forceClearInterval = false) { /* ... */ 
+      google.script.run
+        .withSuccessHandler(status => {
+          remoteReportStatusDisplay.textContent = status;
+          const lowerStatus = status.toLowerCase();
+          if (lowerStatus.includes("ошибка")) {
+            remoteReportStatusDisplay.style.backgroundColor = '#f8d7da'; remoteReportStatusDisplay.style.color = '#721c24';
+            if (remoteReportStatusIntervalId) clearInterval(remoteReportStatusIntervalId); remoteReportStatusIntervalId = null;
+          } else if (lowerStatus.includes("завершено")) {
+            remoteReportStatusDisplay.style.backgroundColor = '#d4edda'; remoteReportStatusDisplay.style.color = '#155724';
+            if (remoteReportStatusIntervalId) clearInterval(remoteReportStatusIntervalId); remoteReportStatusIntervalId = null;
+          } else if (lowerStatus.includes("обработка") || lowerStatus.includes("инициализация") || lowerStatus.includes("запуск") || lowerStatus.includes("ожидайте")) {
+            remoteReportStatusDisplay.style.backgroundColor = '#fff3cd'; remoteReportStatusDisplay.style.color = '#856404';
+            if (!remoteReportStatusIntervalId) { 
+                remoteReportStatusIntervalId = setInterval(() => fetchRemoteReportStatusAndUpdateDisplay(false), 7000); 
+            }
+          } else { 
+            remoteReportStatusDisplay.style.backgroundColor = '#e9ecef'; remoteReportStatusDisplay.style.color = 'var(--secondary-color)';
+            if (remoteReportStatusIntervalId) clearInterval(remoteReportStatusIntervalId); remoteReportStatusIntervalId = null;
+          }
+          if (forceClearInterval && remoteReportStatusIntervalId) {
+             clearInterval(remoteReportStatusIntervalId); remoteReportStatusIntervalId = null;
+          }
+        })
+        .withFailureHandler(err => {
+          remoteReportStatusDisplay.textContent = "Не удалось получить статус удаленного отчета: " + err.message;
+          remoteReportStatusDisplay.style.backgroundColor = '#f8d7da'; remoteReportStatusDisplay.style.color = '#721c24';
+          if (remoteReportStatusIntervalId) clearInterval(remoteReportStatusIntervalId); remoteReportStatusIntervalId = null;
+        })
+        .getRemoteReportStatus();
+    }
+    function loadMachineListFromServer() { /* ... */ 
+        hideGlobalStatus(); hideFormStatusMessage();
+        const token = tokenInput.value.trim();
+        if (!token) {
+            showStatus('Токен не указан. Введите токен для загрузки списка терминалов.', 'error');
+            machineListData = [];
+            populateMachineDropdown();
+            return;
+        }
+        setLoadingState(true, null, "Загрузка списка автоматов...");
+        google.script.run
+            .withSuccessHandler(response => {
+                setLoadingState(false, null);
+                if (response.error) {
+                    showStatus(`Ошибка загрузки терминалов: ${response.error}`, 'error');
+                    machineListData = [];
+                } else {
+                    machineListData = response || [];
+                    if (machineListData.length === 0) {
+                        showStatus('Список терминалов пуст или не загружен (возможно, неверный токен).', 'warning');
+                    } else {
+                        showStatus(`Загружено ${machineListData.length} автоматов.`, 'success', 2000);
+                    }
+                }
+                populateMachineDropdown(terminalIdInput.value.trim());
+            })
+            .withFailureHandler(error => {
+                setLoadingState(false, null);
+                showStatus(`Сбой при загрузке терминалов: ${error.message}`, 'error');
+                machineListData = [];
+                populateMachineDropdown(terminalIdInput.value.trim());
+            })
+            .loadMachineList(token);
+    }
+    function clearTerminalSelection() { /* ... */ 
+        hideGlobalStatus(); hideFormStatusMessage();
+        terminalIdInput.value = "";
+        delete terminalIdInput.dataset.selectedTerminalName;
+        delete terminalIdInput.dataset.selectedMachineId;
+        delete terminalIdInput.dataset.selectedProductMatrixId;
+        currentProductMatrix = [];
+        productInput.value = "";
+        delete productInput.dataset.itemId;
+        packetFormContainer.innerHTML = "<div class='packet-section'><p>Выберите терминал для отображения данных или воспользуйтесь кнопками для пакетных операций.</p></div>";
+        originalPacketData = {};
+        originalTimestamp = null;
+        populateProductsDropdown();
+        if (machineDropdownMenu && terminalDropdownBtn) hideDropdown(machineDropdownMenu, terminalDropdownBtn);
+        showStatus("Выбор терминала очищен.", "info", 3000);
+        loadFromSheetFilterOptions.style.display = 'none'; 
+    }
+    function populateMachineDropdown(filterText = "") { /* ... */ 
+        hideGlobalStatus(); hideFormStatusMessage(); 
+        machineDropdownMenu.innerHTML = "";
+        const clearDiv = document.createElement('div');
+        clearDiv.className = 'dropdown-item clear-selection';
+        clearDiv.textContent = '--- Очистить выбор ---';
+        clearDiv.onclick = clearTerminalSelection;
+        machineDropdownMenu.appendChild(clearDiv);
+
+        const filtered = machineListData.filter(m =>
+            (m.name && m.name.toLowerCase().includes(filterText.toLowerCase())) ||
+            (m.address && m.address.toLowerCase().includes(filterText.toLowerCase()))
+        );
+
+        if (filtered.length === 0) {
+            const noResultsDiv = document.createElement('div');
+            noResultsDiv.className = 'dropdown-item no-results';
+            noResultsDiv.textContent = machineListData.length > 0 ? 'Терминалы не найдены по фильтру.' : 'Список терминалов пуст или не загружен.';
+            machineDropdownMenu.appendChild(noResultsDiv);
+        } else {
+            filtered.forEach(m => {
+                const div = document.createElement('div');
+                div.className = 'dropdown-item';
+                div.textContent = `${m.name} | ${m.address || "без адреса"}`;
+                div.dataset.terminalName = m.name;
+                div.dataset.machineId = m.id; 
+                div.dataset.productMatrixId = m.product_matrix_id;
+                div.onclick = () => { 
+                    hideGlobalStatus(); hideFormStatusMessage();
+                    terminalIdInput.value = `${m.name} | ${m.address || "без адреса"}`;
+                    terminalIdInput.dataset.selectedTerminalName = m.name;
+                    terminalIdInput.dataset.selectedMachineId = m.id; 
+                    terminalIdInput.dataset.selectedProductMatrixId = m.product_matrix_id;
+                    hideDropdown(machineDropdownMenu, terminalDropdownBtn);
+                    allMachinesReportContainer.innerHTML = "";
+                    saveAllMachinesToCsvBtn.style.display = 'none';
+                    loadFromSheetFilterOptions.style.display = 'none'; 
+                    loadProductMatrixForTerminal(m.product_matrix_id, () => fetchAllDataForTerminal(null, 'api'));
+                };
+                machineDropdownMenu.appendChild(div);
+            });
+        }
+    }
+    function loadProductMatrixForTerminal(productMatrixId, callback) { /* ... */ 
+        hideGlobalStatus(); hideFormStatusMessage();
+        currentProductMatrix = [];
+        productInput.value = "";
+        delete productInput.dataset.itemId;
+        const token = tokenInput.value.trim();
+        if (!productMatrixId || !token) {
+            populateProductsDropdown();
+            if (callback) callback();
+            return;
+        }
+        setLoadingState(true, null, "Загрузка матрицы...");
+        google.script.run
+            .withSuccessHandler(response => {
+                setLoadingState(false, null);
+                if (response.error) {
+                    showStatus(`Ошибка загрузки матрицы товаров: ${response.error}`, "warning");
+                    currentProductMatrix = [];
+                } else {
+                    currentProductMatrix = response || [];
+                }
+                populateProductsDropdown();
+                if (callback) callback();
+            })
+            .withFailureHandler(error => {
+                setLoadingState(false, null);
+                showStatus(`Сбой при загрузке матрицы товаров: ${error.message}`, "error");
+                currentProductMatrix = [];
+                populateProductsDropdown();
+                if (callback) callback();
+            })
+            .loadProductMatrix(productMatrixId, token);
+    }
+    function populateProductsDropdown() { /* ... */ 
+        hideGlobalStatus(); hideFormStatusMessage(); 
+        productsDropdownMenu.innerHTML = "";
+        if (currentProductMatrix.length === 0) {
+            productsDropdownMenu.innerHTML = `<div class='dropdown-item no-results'>Товары не найдены или не загружены для этого автомата.</div>`;
+        } else {
+            currentProductMatrix.forEach(prod => {
+                const div = document.createElement('div');
+                div.className = 'dropdown-item';
+                div.textContent = `${prod.product_name} (ID: ${prod.item_id})`; 
+                div.onclick = () => { 
+                    hideGlobalStatus(); hideFormStatusMessage();
+                    productInput.value = prod.product_name;
+                    productInput.dataset.itemId = prod.item_id; 
+                    hideDropdown(productsDropdownMenu, productDropdownBtn);
+                };
+                productsDropdownMenu.appendChild(div);
+            });
+        }
+    }
+    async function waitForPacketDataUpdate(token, terminalName, statusUpdater) { /* ... */ 
+        let attempts = 0; const maxAttempts = MAX_AUTO_UPDATE_ATTEMPTS; const interval = AUTO_UPDATE_INTERVAL; statusUpdater(`Ожидание ответа от "${terminalName}"... (попытка ${attempts + 1})`); while (attempts < maxAttempts) { try { const packetResp = await new Promise((resolve, reject) => { google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).updateData({ token: token, terminalId: terminalName }); }); if (packetResp && packetResp.found && packetResp.timestamp) { statusUpdater(`Данные для "${terminalName}" получены.`); return packetResp; } else if (packetResp && packetResp.error && packetResp.error.toLowerCase().includes("нет данных журнала пакетов")) { attempts++; statusUpdater(`Ожидание ответа от "${terminalName}"... (попытка ${attempts + 1})`); if (attempts >= maxAttempts) break; await new Promise(resolve => setTimeout(resolve, interval)); } else { statusUpdater(`Проблема при ожидании данных для "${terminalName}": ${packetResp.error || 'неожиданный ответ'}`); return packetResp; } } catch (error) { attempts++; statusUpdater(`Сбой при ожидании данных для "${terminalName}" (попытка ${attempts + 1}): ${error.message}`); if (attempts >= maxAttempts) { return { error: `Превышено время ожидания данных для "${terminalName}".`, found: false }; } await new Promise(resolve => setTimeout(resolve, interval)); } } statusUpdater(`Таймаут ожидания данных для "${terminalName}".`); return { error: `Таймаут ожидания данных для "${terminalName}".`, found: false };
+    }
+    function fetchAllDataForTerminal(statusToDisplayOnRender = null, source = 'api') { /* ... */ 
+        hideGlobalStatus(); hideFormStatusMessage();
+        const token = tokenInput.value.trim();
+        const terminalName = terminalIdInput.dataset.selectedTerminalName;
+        const machineId = terminalIdInput.dataset.selectedMachineId;
+        const productMatrixId = terminalIdInput.dataset.selectedProductMatrixId;
+
+        if (!token || !terminalName) {
+            showStatus("Токен и ID терминала (имя) обязательны!", "error");
+            packetFormContainer.innerHTML = "<div class='packet-section'><p>Выберите терминал.</p></div>";
+            return;
+        }
+        allMachinesReportContainer.innerHTML = "";
+        saveAllMachinesToCsvBtn.style.display = 'none';
+        loadFromSheetFilterOptions.style.display = 'none'; 
+
+
+        if (source === 'api') {
+            setLoadingState(true, updateReportBtn);
+            let packetLogData;
+            google.script.run
+                .withSuccessHandler(async packetResp => {
+                    packetLogData = packetResp;
+                    if (packetResp.error && packetResp.error.toLowerCase().includes("нет данных журнала пакетов")) {
+                        showStatus("Данные пакета не найдены. Запрашиваю обновление через {zapros}...", "info", 7000);
+                        const paramsForZapros = getCurrentTerminalParamsForCommand();
+                        if (paramsForZapros) {
+                            paramsForZapros.str_parameter1 = "{zapros}";
+                            await new Promise((resolve, reject) => {google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).sendCommand(paramsForZapros);});
+                            packetLogData = await waitForPacketDataUpdate(token, terminalName, (statusMsg) => {
+                                showStatus(`Запрос для "${terminalName}": ${statusMsg}`, "info", 5000);
+                            });
+                            if (packetLogData.error || !packetLogData.found) {
+                                setLoadingState(false, updateReportBtn);
+                                showStatus(`Данные для "${terminalName}" так и не получены: ${packetLogData.error || 'нет данных'}`, "warning");
+                                packetFormContainer.innerHTML = `<div class='packet-section'><p>Данные для "${terminalName}" не получены.</p></div>`;
+                                return;
+                            }
+                        }
+                    }
+
+                    if (packetLogData.error || !packetLogData.found) {
+                        setLoadingState(false, updateReportBtn);
+                        showStatus(packetLogData.error || "Данные пакета не найдены.", packetLogData.error ? "error" : "warning");
+                        packetFormContainer.innerHTML = `<div class='packet-section'><p style='color:var(--danger-color);'>${packetLogData.error || "Данные пакета не найдены."}</p></div>`;
+                        originalPacketData = {}; originalTimestamp = null;
+                        return;
+                    }
+
+                    if (machineId) {
+                        google.script.run
+                            .withSuccessHandler(ingredRespServer => {
+                                setLoadingState(false, updateReportBtn);
+                                let ingredientsData = [];
+                                if (ingredRespServer.error) {
+                                    showStatus(`Ошибка загрузки остатков: ${ingredRespServer.error}.`, "warning");
+                                } else {
+                                    ingredientsData = ingredRespServer || [];
+                                }
+                                const mergedTableRows = mergeAllData(packetLogData, currentProductMatrix, ingredientsData);
+                                renderProductTable(mergedTableRows, packetLogData, statusToDisplayOnRender, 'api');
+                                if (!statusToDisplayOnRender) showSuccessMessageAfterLoad(packetLogData, ingredRespServer, 'api');
+                            })
+                            .withFailureHandler(ingredErr => {
+                                setLoadingState(false, updateReportBtn);
+                                showStatus(`Сбой при загрузке остатков: ${ingredErr.message}.`, "error");
+                                const mergedTableRows = mergeAllData(packetLogData, currentProductMatrix, []);
+                                renderProductTable(mergedTableRows, packetLogData, statusToDisplayOnRender, 'api');
+                            })
+                            .loadMachineIngredients(machineId, token);
+                    } else {
+                        setLoadingState(false, updateReportBtn);
+                        showStatus("ID машины не определен, остатки не будут загружены.", "warning");
+                        const mergedTableRows = mergeAllData(packetLogData, currentProductMatrix, []);
+                        renderProductTable(mergedTableRows, packetLogData, statusToDisplayOnRender, 'api');
+                        if (!statusToDisplayOnRender) showSuccessMessageAfterLoad(packetLogData, {error: "ID машины не определен"}, 'api');
+                    }
+                })
+                .withFailureHandler(packetErr => {
+                    setLoadingState(false, updateReportBtn);
+                    showStatus(`Сбой при загрузке данных пакета: ${packetErr.message}`, "error");
+                    packetFormContainer.innerHTML = `<div class='packet-section'><p style='color:var(--danger-color);'>Сбой: ${packetErr.message}</p></div>`;
+                    originalPacketData = {}; originalTimestamp = null;
+                })
+                .updateData({ token: token, terminalId: terminalName });
+        }
+    }
+    function showSuccessMessageAfterLoad(packetLogResp, ingredResp, source){ /* ... */ 
+        if (packetLogResp.error) return;
+        const sourceText = source === 'sheet' ? "из таблицы" : "с API";
+        const ingredError = ingredResp && ingredResp.error;
+
+        if (ingredError && ingredError !== "ID машины не определен" && source === 'api') {
+            showStatus(`Основные данные ${sourceText} загружены. Остатки не загружены (${ingredError}).`, "info", 3000);
+        } else {
+            showStatus(`Все данные успешно загружены ${sourceText}.`, "success", 3000);
+        }
+    }
+    function mergeAllData(packetData, productMatrix, ingredientsData) { /* ... */ 
+        const tableRows = [];
+        for (let i = 0; i < NUM_SLOTS; i++) {
+            const slotNumber = i + 1;
+            const product = productMatrix.find(p => p.item_id === slotNumber);
+            let row = {
+                slot: slotNumber,
+                productName: product ? product.product_name : `Отсек ${slotNumber}`,
+                price: (packetData.prices && packetData.prices[i] !== undefined) ? packetData.prices[i] : 0,
+                error: (packetData.errors && packetData.errors[i] !== undefined) ? packetData.errors[i] : 0,
+                loading: 'N/A', capacity: 'N/A', item_id: slotNumber
+            };
+            if (product && Array.isArray(ingredientsData) && ingredientsData.length > 0) {
+                const matchedIngredient = ingredientsData.find(ing =>
+                    ing.ingredient_name && product.product_name &&
+                    ing.ingredient_name.trim().toLowerCase() === product.product_name.trim().toLowerCase()
+                );
+                if (matchedIngredient) {
+                    row.loading = matchedIngredient.loading !== undefined ? matchedIngredient.loading : 'N/A';
+                    row.capacity = matchedIngredient.capacity !== undefined ? matchedIngredient.capacity : 'N/A';
+                }
+            }
+            tableRows.push(row);
+        }
+        return tableRows;
+    }
+    function renderProductTable(tableRowsData, packetLogCoreData, statusType = null, source = 'api') { /* ... */ 
+        packetFormContainer.innerHTML = ''; 
+        originalPacketData = {
+            prices: packetLogCoreData.prices ? packetLogCoreData.prices.slice() : new Array(NUM_SLOTS).fill(0),
+            errors: packetLogCoreData.errors ? packetLogCoreData.errors.slice() : new Array(NUM_SLOTS).fill(0),
+            allowed_errors: packetLogCoreData.allowed_errors,
+            uart_speed: packetLogCoreData.uart_speed
+        };
+        originalTimestamp = packetLogCoreData.timestamp;
+
+        const currentDataTimeStr = formatTime(packetLogCoreData.timestamp);
+        const sourceText = source === 'sheet' ? ' (из Таблицы)' : ' (с API)';
+        
+        let formHtml = `<form id="packetEditForm" class="packet-section">`;
+        let statusMsgHtml = '';
+        if (statusType === "updated") {
+            statusMsgHtml = `<div class="status-message-bar success">✅ Изменения на сервере подтверждены (данные обновлены до ${currentDataTimeStr}${sourceText}).</div>`;
+        } else if (statusType === "not-updated") {
+            statusMsgHtml = `<div class="status-message-bar warning">⚠️ Данные на сервере не изменились (время данных: ${currentDataTimeStr}${sourceText}). Отображаются актуальные серверные данные.</div>`;
+        }
+        if (statusMsgHtml) formHtml += statusMsgHtml;
+
+        formHtml += `<table id="productDataTable"><thead><tr><th>Отсек</th><th>Наименование</th><th>Цена (коп)</th><th>Ошибка</th><th>Остаток</th><th>Вместимость</th><th>% Остатка</th></tr></thead><tbody>`;
+        
+        const displayRows = source === 'sheet' && packetLogCoreData.sheetRowData ? packetLogCoreData.sheetRowData : tableRowsData;
+
+        displayRows.forEach((row, index) => {
+            let percentage = 0; let displayText = 'N/A';
+            const loadingNum = parseFloat(row.loading);
+            const capacityNum = parseFloat(row.capacity);
+            if (!isNaN(loadingNum) && !isNaN(capacityNum) && capacityNum > 0) {
+                percentage = Math.max(0, Math.min(100, (loadingNum / capacityNum) * 100));
+                displayText = Math.round(percentage) + '%';
+            } else if (!isNaN(loadingNum) && !isNaN(capacityNum) && capacityNum === 0 && loadingNum === 0) {
+                percentage = 0; displayText = '0%';
+            }
+            const priceForInput = (packetLogCoreData.prices && packetLogCoreData.prices[index] !== undefined) ? packetLogCoreData.prices[index] : (row.price || 0);
+            const errorForInput = (packetLogCoreData.errors && packetLogCoreData.errors[index] !== undefined) ? packetLogCoreData.errors[index] : (row.error || 0);
+
+            formHtml += `<tr>
+                            <td>${row.slot}</td>
+                            <td>${row.productName}</td>
+                            <td><input type="number" name="price_${index}" value="${priceForInput}" min="0"></td>
+                            <td><input type="number" name="error_${index}" value="${errorForInput}" min="0"></td>
+                            <td>${row.loading}</td>
+                            <td>${row.capacity}</td>
+                            <td> <div class="progress-bar-container"><div class="progress-bar-fill" style="width: ${percentage.toFixed(2)}%;">${displayText}</div></div></td>
+                         </tr>`;
+        });
+        formHtml += `</tbody></table>`;
+        formHtml += `<div class="other-params-container">
+                        <label for="allowed_errors">Допустимых ошибок: <input type="number" id="allowed_errors" name="allowed_errors" value="${packetLogCoreData.allowed_errors !== null ? packetLogCoreData.allowed_errors : 0}" min="0"></label>
+                        <label for="uart_speed">Скорость UART: <input type="number" id="uart_speed" name="uart_speed" value="${packetLogCoreData.uart_speed !== null ? packetLogCoreData.uart_speed : 0}" min="0"></label>
+                     </div>`;
+        formHtml += `<div class="packet-footer">
+                        <div class="packet-time">Время данных на форме: ${currentDataTimeStr}${sourceText}</div>
+                        <button type="submit" id="savePacketParamsBtn" class="btn btn-success action-btn">Сформировать и отправить параметры</button>
+                     </div></form>`;
+        packetFormContainer.innerHTML = formHtml;
+
+        const saveButton = document.getElementById('savePacketParamsBtn');
+        if (saveButton) { 
+            document.getElementById('packetEditForm').addEventListener('submit', (event) => {
+                event.preventDefault();
+                hideGlobalStatus(); hideFormStatusMessage(); 
+                handleSavePacketParams(saveButton);
+            });
+        }
+        
+        if (source === 'api' && !statusType) { 
+        } else {
+            clearTimeout(autoUpdateTimeoutId); 
+        }
+    }
+    function renderReadOnlyProductTable(tableRowsData, machineNameForTitle = null, machineAddress = null) { 
+        let tableHtml = `<table class="product-table-readonly"><thead><tr><th>Отсек</th><th>Наименование</th><th>Цена (коп)</th><th>Ошибка</th><th>Остаток</th><th>Вместимость</th><th>% Остатка</th></tr></thead><tbody>`;
+        
+        const filteredRows = tableRowsData.filter(row => !(row.productName && /^Отсек \d+$/.test(row.productName.trim())));
+
+        if (filteredRows.length === 0) {
+            tableHtml += `<tr><td colspan="7" style="text-align:center; color: grey;">Нет активных товаров для отображения.</td></tr>`;
+        } else {
+            filteredRows.forEach(row => {
+                let percentage = 0; let displayText = 'N/A';
+                const loadingNum = parseFloat(row.loading);
+                const capacityNum = parseFloat(row.capacity);
+                if (!isNaN(loadingNum) && !isNaN(capacityNum) && capacityNum > 0) {
+                    percentage = Math.max(0, Math.min(100, (loadingNum / capacityNum) * 100));
+                    displayText = Math.round(percentage) + '%';
+                } else if (!isNaN(loadingNum) && !isNaN(capacityNum) && capacityNum === 0 && loadingNum === 0) {
+                    percentage = 0; displayText = '0%';
+                }
+                tableHtml += `<tr>
+                                <td>${row.slot}</td>
+                                <td>${row.productName}</td>
+                                <td>${row.price}</td>
+                                <td>${row.error}</td>
+                                <td>${row.loading}</td>
+                                <td>${row.capacity}</td>
+                                <td><div class="progress-bar-container" style="height: 18px;"><div class="progress-bar-fill" style="width: ${percentage.toFixed(2)}%; font-size:0.75em;">${displayText}</div></div></td>
+                              </tr>`;
+            });
+        }
+        tableHtml += `</tbody></table>`;
+        return tableHtml;
+    }
+    function startAutoUpdateCheck() { /* ... */ 
+        autoUpdateCounter = 0;
+        clearTimeout(autoUpdateTimeoutId);
+        showStatus("Проверка обновления данных на сервере...", "info", (MAX_AUTO_UPDATE_ATTEMPTS + 1) * AUTO_UPDATE_INTERVAL, false); 
+
+        function attemptUpdateCheck() {
+            autoUpdateCounter++;
+            if (autoUpdateCounter > MAX_AUTO_UPDATE_ATTEMPTS) {
+                fetchAllDataForTerminal("not-updated", 'api'); 
+                return;
+            }
+            const token = tokenInput.value.trim();
+            const terminalName = terminalIdInput.dataset.selectedTerminalName;
+            if (!token || !terminalName) {
+                showStatus("Автообновление остановлено: выберите терминал.", "info", 3000);
+                return;
+            }
+            google.script.run
+                .withSuccessHandler(response => {
+                    if (response.error || !response.found) {
+                        if (autoUpdateCounter < MAX_AUTO_UPDATE_ATTEMPTS) autoUpdateTimeoutId = setTimeout(attemptUpdateCheck, AUTO_UPDATE_INTERVAL);
+                        else fetchAllDataForTerminal("not-updated", 'api');
+                        return;
+                    }
+                    if (response.timestamp && response.timestamp !== originalTimestamp) {
+                         fetchAllDataForTerminal("updated", 'api'); 
+                    } else if (autoUpdateCounter < MAX_AUTO_UPDATE_ATTEMPTS) {
+                        autoUpdateTimeoutId = setTimeout(attemptUpdateCheck, AUTO_UPDATE_INTERVAL);
+                    } else {
+                        fetchAllDataForTerminal("not-updated", 'api');
+                    }
+                })
+                .withFailureHandler(error => {
+                    if (autoUpdateCounter < MAX_AUTO_UPDATE_ATTEMPTS) autoUpdateTimeoutId = setTimeout(attemptUpdateCheck, AUTO_UPDATE_INTERVAL);
+                    else fetchAllDataForTerminal("not-updated", 'api');
+                })
+                .updateData({ token: token, terminalId: terminalName });
+        }
+        autoUpdateTimeoutId = setTimeout(attemptUpdateCheck, AUTO_UPDATE_INTERVAL);
+    }
+    function handleSavePacketParams(saveButton) { /* ... */ 
+        const form = document.getElementById("packetEditForm"); if (!form || !originalPacketData || !originalPacketData.prices) { showStatus("Нет исходных данных для сравнения.", "warning"); return; } const formData = new FormData(form); let resultArr = []; for (let i = 0; i < NUM_SLOTS; i++) { const newPrice = Number(formData.get(`price_${i}`)); if (newPrice !== (originalPacketData.prices[i] || 0)) resultArr.push(`p${i + 1}=${newPrice}`); const newError = Number(formData.get(`error_${i}`)); if (newError !== (originalPacketData.errors[i] || 0)) resultArr.push(`b${i + 1}=${newError}`); } const allowedErrorsVal = Number(formData.get("allowed_errors")); if (allowedErrorsVal !== (originalPacketData.allowed_errors !== null ? originalPacketData.allowed_errors : 0) ) resultArr.push(`bm=${allowedErrorsVal}`); const resultStr = "{" + resultArr.join(";") + (resultArr.length > 0 ? ";" : "") + "}"; strParameter1Input.value = resultStr; const paramsForCommand = getCurrentTerminalParamsForCommand(); if(!paramsForCommand) return; paramsForCommand.str_parameter1 = resultStr; sendCommandAndMonitor(paramsForCommand, saveButton, "Команда с параметрами отправлена. Ожидание обновления данных...", null); 
+    }
+    function getCurrentTerminalParamsForCommand() { /* ... */ 
+        const token = tokenInput.value.trim();
+        const terminalName = terminalIdInput.dataset.selectedTerminalName;
+        if (!token || !terminalName) {
+            showStatus('Токен и ID терминала (имя) обязательны для команды!', 'error');
+            return null;
+        }
+        return { token: token, terminalId: terminalName };
+    }
+    
+    function formatVendistaDateTimeForClient(date) { /* ... */ 
+      const year = date.getFullYear();
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const day = date.getDate().toString().padStart(2, '0');
+      const hours = date.getHours().toString().padStart(2, '0');
+      const minutes = date.getMinutes().toString().padStart(2, '0');
+      const seconds = date.getSeconds().toString().padStart(2, '0');
+      const milliseconds = date.getMilliseconds().toString().padStart(3, '0');
+      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}.${milliseconds}`;
+    }
+
+    function sendCommandAndMonitor(commandParams, buttonElement, baseSuccessMessage, postPacketLogUpdateCallback = null) { // ИЗМЕНЕНО
+        hideGlobalStatus(); hideFormStatusMessage();
+        setLoadingState(true, buttonElement);
+        let timestampBeforeCommandSend = new Date().toISOString(); 
+
+        google.script.run
+            .withSuccessHandler(response => {
+                setLoadingState(false, buttonElement);
+                if (response.error) {
+                    showStatus(`Ошибка команды: ${response.error}`, 'error');
+                } else if (response.status && response.status !== 200 && response.status !== 202) {
+                    showStatus(`Ошибка команды на сервере: ${response.status} - ${response.body}`, 'error');
+                } else {
+                    showStatus(baseSuccessMessage, 'success', 0, false); 
+                    startAutoUpdateCheck(); 
+
+                    if (postPacketLogUpdateCallback) {
+                        const issuedProductName = productInput.value; 
+                        const numericMachineId = terminalIdInput.dataset.selectedMachineId;
+                        const tokenForSales = commandParams.token;
+
+                        if (numericMachineId && issuedProductName && tokenForSales) {
+                            const delayForSalesCheck = (MAX_AUTO_UPDATE_ATTEMPTS + 1) * AUTO_UPDATE_INTERVAL + 1000;
+                            
+                            const logMessage = `Команда отправлена. Данные пакета обновляются... Затем (~${Math.round(delayForSalesCheck/1000)} сек) начнется проверка продажи товара "${issuedProductName}".`;
+                            showStatus(logMessage, 'info', delayForSalesCheck + 5000, true); 
+                            
+                            // Логирование URL в консоль для отладки разработчиком
+                            const VENDISTA_API_BASE_URL_CLIENT = "https://api.vendista.ru:99";
+                            const dateFromLog = new Date(new Date(timestampBeforeCommandSend).getTime() - 2 * 60 * 1000); 
+                            const dateToLog = new Date(new Date(timestampBeforeCommandSend).getTime() + (10 + 2) * 60 * 1000); 
+                            const formattedDateFromLog = formatVendistaDateTimeForClient(dateFromLog);
+                            const formattedDateToLog = formatVendistaDateTimeForClient(dateToLog);
+                            let salesListUrlForLog = `${VENDISTA_API_BASE_URL_CLIENT}/sales/list?MachineId=${encodeURIComponent(numericMachineId)}&DateFrom=${encodeURIComponent(formattedDateFromLog)}&DateTo=${encodeURIComponent(formattedDateToLog)}&ItemsOnPage=10&OrderDesc=true`;
+                            salesListUrlForLog += "&SellTypes=1&SellTypes=2&SellTypes=3&SellTypes=4";
+                            salesListUrlForLog += `&token=${encodeURIComponent(tokenForSales)}`;
+                            console.log("CLIENT: Планируемый URL для проверки продаж (будет запрошен сервером, токен в конце):", salesListUrlForLog);
+
+
+                            setTimeout(() => {
+                                pollForSalesConfirmation(tokenForSales, numericMachineId, issuedProductName, timestampBeforeCommandSend);
+                            }, delayForSalesCheck);
+                        } else {
+                            showStatus("Не удалось получить имя товара, ID автомата или токен для проверки продажи.", "warning", 5000, true);
+                        }
+                    }
+                }
+            })
+            .withFailureHandler(error => {
+                setLoadingState(false, buttonElement);
+                showStatus(`Сбой команды: ${error.message}`, 'error');
+            })
+            .sendCommand(commandParams);
+    }
+
+    async function pollForSalesConfirmation(token, machineId, issuedProductName, timestampBeforeCommand) { // ИЗМЕНЕНО
+        hideGlobalStatus(); 
+        const dateFromForLog = new Date(new Date(timestampBeforeCommand).getTime() - 2 * 60 * 1000);
+        const dateToForLog = new Date(Date.now() + 10 * 60 * 1000); 
+        
+        const initialPollMsg = `Проверка подтверждения продажи для "${issuedProductName}" (автомат ID: ${machineId}). Запрашиваемый интервал примерно: ${formatTime(dateFromForLog)} - ${formatTime(dateToForLog)}`;
+        showStatus(initialPollMsg, 'info', 0); 
+        console.log("CLIENT: pollForSalesConfirmation - Начало проверки для", { token, machineId, issuedProductName, timestampBeforeCommand });
+        
+        salesDebugTableContainer.style.display = 'block';
+        salesDebugTableBody.innerHTML = '<tr><td colspan="5">Загрузка данных о продажах...</td></tr>';
+
+        let attempts = 0;
+        let saleConfirmed = false; 
+        if (salesCheckPollIntervalId) clearInterval(salesCheckPollIntervalId);
+        
+        const paramsForSalesList = { token, machineId, timestampBeforeCommand };
+
+        salesCheckPollIntervalId = setInterval(async () => {
+            if (saleConfirmed) {
+                 clearInterval(salesCheckPollIntervalId);
+                 salesCheckPollIntervalId = null;
+                 setTimeout(() => { salesDebugTableContainer.style.display = 'none'; }, 20000); 
+                 return;
+            }
+            attempts++;
+            const currentStatusMsg = `Проверка продажи "${issuedProductName}"... (попытка ${attempts}/${SALES_CHECK_MAX_ATTEMPTS})`;
+            showStatus(currentStatusMsg, 'info', 0); 
+
+            if (attempts > SALES_CHECK_MAX_ATTEMPTS) {
+                clearInterval(salesCheckPollIntervalId);
+                salesCheckPollIntervalId = null;
+                if (!saleConfirmed) {
+                    showStatus(`Не удалось подтвердить продажу "${issuedProductName}" через список продаж за ${SALES_CHECK_MAX_ATTEMPTS} попыток. Проверьте вручную. Отладочная таблица будет скрыта через 20 сек.`, 'warning', 20000);
+                    productInput.value = ""; delete productInput.dataset.itemId;
+                }
+                 setTimeout(() => { salesDebugTableContainer.style.display = 'none'; }, 20000);
+                return;
+            }
+
+            try {
+                const salesDataFromServer = await new Promise((resolve, reject) => {
+                    google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)
+                        .fetchSalesList(paramsForSalesList); 
+                });
+                
+                console.log(`CLIENT: Попытка ${attempts}: Получены данные о продажах:`, JSON.stringify(salesDataFromServer));
+                
+                salesDebugTableBody.innerHTML = ''; 
+                if (Array.isArray(salesDataFromServer) && salesDataFromServer.length > 0) {
+                    salesDataFromServer.forEach(s => {
+                        const tr = salesDebugTableBody.insertRow();
+                        tr.insertCell().textContent = s.id || 'N/A';
+                        tr.insertCell().textContent = s.item_name || s.product_name || 'N/A';
+                        tr.insertCell().textContent = s.time ? formatTime(s.time) : 'N/A';
+                        tr.insertCell().textContent = s.item_price !== undefined ? (s.item_price / 100).toFixed(2) : 'N/A'; 
+                        tr.insertCell().textContent = s.quantity || 'N/A';
+                    });
+                } else if (salesDataFromServer.error) {
+                     const tr = salesDebugTableBody.insertRow();
+                     const td = tr.insertCell();
+                     td.colSpan = 5;
+                     td.textContent = `Ошибка API: ${salesDataFromServer.error}`;
+                } else {
+                     const tr = salesDebugTableBody.insertRow();
+                     const td = tr.insertCell();
+                     td.colSpan = 5;
+                     td.textContent = `Продаж не найдено в этом запросе.`;
+                }
+
+
+                if (salesDataFromServer.error) {
+                    showStatus(`${currentStatusMsg}. Ошибка API продаж: ${salesDataFromServer.error}`, 'warning', 3000, true);
+                    console.warn(`CLIENT: Попытка ${attempts}: Ошибка API продаж:`, salesDataFromServer.error);
+                    return; 
+                }
+
+                if (Array.isArray(salesDataFromServer) && salesDataFromServer.length > 0) {
+                    showStatus(`${currentStatusMsg}. Получено ${salesDataFromServer.length} продаж. Проверяем соответствие по названию "${issuedProductName}"...`, 'info', 0, true);
+                    
+                    for (const sale of salesDataFromServer) { 
+                        const saleTime = new Date(sale.time);
+                        const commandTime = new Date(timestampBeforeCommand); 
+                        const timeDiffSeconds = (saleTime.getTime() - commandTime.getTime()) / 1000;
+
+                        console.log(`CLIENT: Сравниваем продажу "${sale.product_name || sale.item_name}" (время: ${sale.time}, ID: ${sale.id}) с "${issuedProductName}". Разница времени: ${timeDiffSeconds} сек.`);
+
+                        if ( (sale.product_name && sale.product_name.trim().toLowerCase() === issuedProductName.trim().toLowerCase()) ||
+                             (sale.item_name && sale.item_name.trim().toLowerCase() === issuedProductName.trim().toLowerCase()) 
+                           ) {
+                            if (timeDiffSeconds >= -60 ) { 
+                                saleConfirmed = true; 
+                                clearInterval(salesCheckPollIntervalId); 
+                                salesCheckPollIntervalId = null;
+
+                                const displaySaleTime = sale.time ? formatTime(sale.time) : 'неизвестно';
+                                const saleApiItemId = sale.item_id || sale.product_id || sale.menu_item_id || 'N/A'; 
+                                showStatus(`✅ Товар "${issuedProductName}" (API ID: ${saleApiItemId}) ВЫДАН! Время продажи: ${displaySaleTime}`, 'success', 15000);
+                                productInput.value = ""; delete productInput.dataset.itemId; 
+                                console.log("CLIENT: Продажа подтверждена:", sale);
+                                setTimeout(() => { salesDebugTableContainer.style.display = 'none'; }, 20000);
+                                return; 
+                            } else {
+                                console.log(`CLIENT: Найдена продажа товара "${issuedProductName}", но время ${sale.time} слишком раннее по сравнению с временем команды ${timestampBeforeCommand}.`);
+                            }
+                        }
+                    }
+                    if (!saleConfirmed) {
+                         console.log(`CLIENT: Попытка ${attempts}: Товар "${issuedProductName}" пока не найден среди ${salesDataFromServer.length} продаж в нужном временном диапазоне.`);
+                    }
+                } else {
+                     console.log(`CLIENT: Попытка ${attempts}: Продажи не найдены или ответ не массив.`, salesDataFromServer);
+                }
+            } catch (error) {
+                showStatus(`${currentStatusMsg}. Сбой при проверке продаж: ${error.message}`, 'error', 3000, true);
+                console.error(`CLIENT: Попытка ${attempts}: Сбой при проверке продаж:`, error);
+            }
+        }, SALES_CHECK_POLL_TIME_MS);
+    }
+    
+    // ... (fetchAllMachinesReportBtn, saveAllMachinesToCsvBtn, DOMContentLoaded и остальные обработчики - БЕЗ ИЗМЕНЕНИЙ) ...
+    fetchAllMachinesReportBtn.addEventListener('click', async () => { 
+        hideGlobalStatus(); hideFormStatusMessage();
+        salesDebugTableContainer.style.display = 'none';
+        loadFromSheetFilterOptions.style.display = 'none'; 
+        if (isFetchingAllMachines) { showStatus("Процесс уже запущен.", "info"); return; }
+        const token = tokenInput.value.trim();
+        if (!token) { showStatus("Токен не указан!", "error"); return; }
+        if (machineListData.length === 0) {
+            showStatus("Список автоматов не загружен. Попытка загрузить...", "warning", 3000);
+            loadMachineListFromServer();
+            return;
+        }
+        isFetchingAllMachines = true; setLoadingState(true, fetchAllMachinesReportBtn, "Загрузка всех...");
+        allMachinesReportContainer.innerHTML = "";
+        packetFormContainer.innerHTML = "<div class='packet-section'><p>Идет формирование отчета по всем автоматам (с API)...</p></div>"; 
+        saveAllMachinesToCsvBtn.style.display = 'none'; let currentMachineIndex = 0;
+        for (const machine of machineListData) {
+            currentMachineIndex++;
+            const mainStatusText = `Обработка "${machine.name}" (${currentMachineIndex}/${machineListData.length})...`;
+            showStatus(mainStatusText, "info", 0); 
+            setLoadingState(true, fetchAllMachinesReportBtn, `Обработка ${currentMachineIndex}/${machineListData.length}`);
+            const machineReportDiv = document.createElement('div');
+            machineReportDiv.className = 'machine-report-block';
+            machineReportDiv.innerHTML = `<h3 class="machine-title">${machine.name} (${machine.address || 'Адрес не указан'})</h3><div class="machine-data-content">Загрузка...</div>`;
+            allMachinesReportContainer.appendChild(machineReportDiv);
+            const machineDataContentDiv = machineReportDiv.querySelector('.machine-data-content');
+            let currentMachineHtml = "";
+            let fetchLogDisplay = ""; 
+
+            try {
+                let products = []; let matrixErrorMessage = "";
+                if (machine.product_matrix_id) {
+                    const matrixResp = await new Promise((resolve, reject) => { google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).loadProductMatrix(machine.product_matrix_id, token); });
+                    if (matrixResp.error) { matrixErrorMessage = `Ошибка матрицы: ${matrixResp.error}`; fetchLogDisplay += matrixErrorMessage + "; ";}
+                    else { products = matrixResp || []; fetchLogDisplay += "Матрица успешно загружена; ";}
+                } else { matrixErrorMessage = `Матрица продуктов не задана`; fetchLogDisplay += matrixErrorMessage + "; "; }
+
+                let packetResp = await new Promise((resolve, reject) => { google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).updateData({ token: token, terminalId: machine.name }); });
+                if (packetResp.error && packetResp.error.toLowerCase().includes("нет данных журнала пакетов")) {
+                    fetchLogDisplay += `Данные пакета не найдены для "${machine.name}". Отправка {zapros}...; `;
+                    const paramsForZapros = { token: token, terminalId: machine.name, str_parameter1: "{zapros}" };
+                    await new Promise((resolve, reject) => {google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).sendCommand(paramsForZapros);});
+                    packetResp = await waitForPacketDataUpdate(token, machine.name, (statusMsg) => {
+                    });
+                    if (packetResp.error || !packetResp.found) { fetchLogDisplay += `Данные пакета для "${machine.name}" так и не получены после запроса: ${packetResp.error || 'нет данных'}; `; }
+                    else { fetchLogDisplay += `Данные пакета получены после {zapros}; `; }
+                } else if (packetResp.error || !packetResp.found) { fetchLogDisplay += `Данные пакета для "${machine.name}": ${packetResp.error || 'не найдены'}; `; }
+                else { fetchLogDisplay += `Данные пакета успешно загружены; `; }
+
+
+                let ingredients = []; let ingredientsErrorMessage = "";
+                if (machine.id) {
+                    const ingredResp = await new Promise((resolve, reject) => { google.script.run.withSuccessHandler(resolve).withFailureHandler(reject).loadMachineIngredients(machine.id, token); });
+                    if (ingredResp.error) { ingredientsErrorMessage = `Ошибка остатков: ${ingredResp.error}`; fetchLogDisplay += ingredientsErrorMessage+"; "; }
+                    else { ingredients = ingredResp || []; fetchLogDisplay += `Остатки успешно загружены; `; }
+                } else { ingredientsErrorMessage = `ID автомата для остатков не найден`; fetchLogDisplay += ingredientsErrorMessage+"; "; }
+
+                if (fetchLogDisplay) {
+                    currentMachineHtml += `<div class="fetch-log-display"><em>Этапы: ${fetchLogDisplay.replace(/; $/, "")}</em></div>`;
+                }
+                if(matrixErrorMessage && !products.length) currentMachineHtml += `<p style="color: var(--warning-color);">${matrixErrorMessage}</p>`;
+                if(ingredientsErrorMessage && !ingredients.length) currentMachineHtml += `<p style="color: var(--warning-color);">${ingredientsErrorMessage}</p>`;
+
+                if (packetResp.found) {
+                    const mergedData = mergeAllData(packetResp, products, ingredients);
+                    const displayableMergedData = mergedData.filter(row => !(row.productName && /^Отсек \d+$/.test(row.productName.trim())));
+                    
+                    if (displayableMergedData.length > 0) {
+                        currentMachineHtml += renderReadOnlyProductTable(displayableMergedData);
+                    } else {
+                        currentMachineHtml += `<p>Нет активных товаров для отображения (после фильтрации "Отсек X").</p>`;
+                    }
+                    currentMachineHtml += `<div class="other-params-readonly"><span>Доп.ошибок:</span> ${packetResp.allowed_errors !== null ? packetResp.allowed_errors : 'N/A'} | <span>UART:</span> ${packetResp.uart_speed !== null ? packetResp.uart_speed : 'N/A'} | <span>Время:</span> ${formatTime(packetResp.timestamp)}</div>`;
+                } else if (!packetResp.error) { 
+                     currentMachineHtml += `<p style="color: var(--warning-color);">Данные пакета не найдены для этого автомата.</p>`;
+                } else if (packetResp.error) { 
+                     currentMachineHtml += `<p style="color: var(--danger-color);">Ошибка загрузки данных пакета: ${packetResp.error}</p>`;
+                }
+            } catch (error) {
+                currentMachineHtml += `<p style="color: var(--danger-color);">Общая ошибка при загрузке для "${machine.name}": ${error.message || String(error)}</p>`;
+            }
+            machineDataContentDiv.innerHTML = currentMachineHtml;
+            await new Promise(resolve => setTimeout(resolve, 300)); 
+        }
+        setLoadingState(false, fetchAllMachinesReportBtn); isFetchingAllMachines = false;
+        showStatus("Загрузка данных по всем автоматам завершена.", "success");
+        if (allMachinesReportContainer.children.length > 0) {
+            saveAllMachinesToCsvBtn.style.display = 'inline-block';
+        }
+    });
+    saveAllMachinesToCsvBtn.addEventListener('click', () => { /* ... */ 
+        hideGlobalStatus(); hideFormStatusMessage();
+        salesDebugTableContainer.style.display = 'none';
+        if (allMachinesReportContainer.children.length === 0) { showStatus("Нет данных для сохранения. Сначала сформируйте отчет по всем автоматам.", "warning"); return; } let csvContent = "Автомат;Адрес;Отсек;Наименование;Цена (коп);Ошибка;Остаток;Вместимость;% Остатка;Доп. ошибки;UART;Время данных\n"; Array.from(allMachinesReportContainer.children).forEach(machineBlock => { if (!machineBlock.classList.contains('machine-report-block')) return; const titleElement = machineBlock.querySelector('.machine-title'); const machineFullName = titleElement ? titleElement.textContent.trim() : 'Неизвестный автомат'; let machineName = machineFullName; let machineAddress = ''; const addressMatch = machineFullName.match(/\(([^)]+)\)$/); if (addressMatch && addressMatch[1]) { machineAddress = addressMatch[1].replace("Адрес не указан", "").trim(); machineName = machineFullName.substring(0, machineFullName.lastIndexOf('(')).trim(); } else { machineAddress = '';} const table = machineBlock.querySelector('.product-table-readonly'); const otherParamsDiv = machineBlock.querySelector('.other-params-readonly'); let allowedErrors = 'N/A', uartSpeed = 'N/A', dataTimestamp = 'N/A'; if (otherParamsDiv) { const paramsText = otherParamsDiv.textContent; const errMatch = paramsText.match(/Доп\.ошибок: ([^|]+)/); const uartMatch = paramsText.match(/UART: ([^|]+)/); const timeMatch = paramsText.match(/Время: (.*)$/); if (errMatch) allowedErrors = errMatch[1].trim(); if (uartMatch) uartSpeed = uartMatch[1].trim(); if (timeMatch) dataTimestamp = timeMatch[1].trim(); } const parseErrorP = machineBlock.querySelector('.machine-data-content > p[style*="color: var(--danger-color)"], .machine-data-content > p[style*="color: var(--warning-color)"]'); if (table) { const rows = table.querySelectorAll('tbody tr'); rows.forEach(row => { const cells = row.querySelectorAll('td'); if (cells.length >= 7 && cells[0].textContent.trim() !== "-") { const slot = cells[0].textContent.trim(); const productName = `"${cells[1].textContent.trim().replace(/"/g, '""')}"`; const price = cells[2].textContent.trim(); const error = cells[3].textContent.trim(); const loading = cells[4].textContent.trim(); const capacity = cells[5].textContent.trim(); const progressBarCell = cells[6].querySelector('.progress-bar-fill'); const percentage = progressBarCell ? progressBarCell.textContent.trim() : 'N/A'; csvContent += `"${machineName}";"${machineAddress}";${slot};${productName};${price};${error};${loading};${capacity};"${percentage}";${allowedErrors};${uartSpeed};"${dataTimestamp}"\n`; } }); } else if (parseErrorP) { csvContent += `"${machineName}";"${machineAddress}";;;;;;;;"${parseErrorP.textContent.trim().replace(/"/g, '""')}";${allowedErrors};${uartSpeed};"${dataTimestamp}"\n`; } else { csvContent += `"${machineName}";"${machineAddress}";;;;;;;;${allowedErrors};${uartSpeed};"${dataTimestamp}"\n`; } csvContent += ";;;;;;;;;;\n"; }); const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' }); const link = document.createElement("a"); if (link.download !== undefined) { const url = URL.createObjectURL(blob); link.setAttribute("href", url); const now = new Date(); const filename = `report_all_machines_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}.csv`; link.setAttribute("download", filename); link.style.visibility = 'hidden'; document.body.appendChild(link); link.click(); document.body.removeChild(link); showStatus("Отчет сохранен в CSV.", "success"); } else { showStatus("Ваш браузер не поддерживает прямую загрузку.", "warning"); }
+    });
+    document.addEventListener('DOMContentLoaded', () => { /* ... */ 
+        tokenInput.value = VENDISTA_API_TOKEN_CONST;
+        fetchRemoteReportStatusAndUpdateDisplay(true); 
+
+        if (tokenInput.value.trim()) {
+            loadMachineListFromServer();
+        } else {
+            populateMachineDropdown();
+            showStatus("Токен не установлен. Пожалуйста, введите токен.", "warning");
+        }
+
+        tokenInput.addEventListener('change', loadMachineListFromServer);
+        tokenInput.addEventListener('blur', () => {
+            if (tokenInput.value.trim() && machineListData.length === 0) {
+                 loadMachineListFromServer();
+            }
+        });
+
+        terminalIdInput.addEventListener('input', (event) => {
+            populateMachineDropdown(event.target.value.trim());
+            machineDropdownMenu.style.display = 'block';
+            terminalDropdownBtn.setAttribute('aria-expanded', 'true');
+        });
+
+        terminalDropdownBtn.addEventListener('click', () => toggleDropdown(machineDropdownMenu, terminalDropdownBtn));
+        productDropdownBtn.addEventListener('click', () => toggleDropdown(productsDropdownMenu, productDropdownBtn));
+
+        document.addEventListener('click', (event) => {
+            if (terminalDropdownBtn && machineDropdownMenu && !machineDropdownMenu.contains(event.target) && event.target !== terminalIdInput && event.target !== terminalDropdownBtn) {
+                hideDropdown(machineDropdownMenu, terminalDropdownBtn);
+            }
+            if (productDropdownBtn && productsDropdownMenu && !productsDropdownMenu.contains(event.target) && event.target !== productInput && event.target !== productDropdownBtn) {
+                hideDropdown(productsDropdownMenu, productDropdownBtn);
+            }
+        });
+
+        updateReportBtn.addEventListener('click', () => {
+            hideGlobalStatus(); hideFormStatusMessage();
+            salesDebugTableContainer.style.display = 'none';
+            loadFromSheetFilterOptions.style.display = 'none';
+            if (terminalIdInput.dataset.selectedTerminalName) {
+                fetchAllDataForTerminal(null, 'api');
+            } else {
+                showStatus("Сначала выберите терминал из списка для обновления с API.", "warning");
+            }
+        });
+        
+        function renderAllMachinesFromSheetCache() { 
+            hideGlobalStatus(); hideFormStatusMessage();
+            salesDebugTableContainer.style.display = 'none';
+            allMachinesReportContainer.innerHTML = ""; 
+            saveAllMachinesToCsvBtn.style.display = 'none';
+
+            if (!allMachinesDataFromSheetCache || allMachinesDataFromSheetCache.length === 0) {
+                showStatus('Нет кешированных данных для отображения. Сначала загрузите данные из таблицы.', 'info');
+                packetFormContainer.innerHTML = "<div class='packet-section'><p>Сначала загрузите данные из таблицы.</p></div>";
+                allMachinesReportContainer.innerHTML = "<div class='packet-section'><p>Нет данных для отображения. Загрузите из таблицы.</p></div>";
+                return;
+            }
+
+            let machinesToDisplay = JSON.parse(JSON.stringify(allMachinesDataFromSheetCache)); 
+
+            machinesToDisplay = machinesToDisplay.map(machineData => {
+                const filteredProductRows = machineData.rows.filter(row => !(row.productName && /^Отсек \d+$/.test(row.productName.trim())));
+                return {...machineData, rows: filteredProductRows};
+            });
+
+
+            if (filterOnlyErrorsSheetCheckbox.checked) {
+                machinesToDisplay = machinesToDisplay.map(machineData => {
+                    const errorRows = machineData.rows.filter(row => row.error > 0);
+                    if (machineData.parseError || errorRows.length > 0) {
+                        return {...machineData, rows: errorRows}; 
+                    }
+                    return null; 
+                }).filter(m => m !== null); 
+                showStatus(`Отфильтровано с ошибками: ${machinesToDisplay.length} из ${allMachinesDataFromSheetCache.length} автоматов.`, 'success', 4000);
+            } else {
+                 showStatus(`Отображено ${machinesToDisplay.length} автоматов из таблицы.`, 'success', 3000);
+            }
+            
+            if (machinesToDisplay.length === 0 ) {
+                allMachinesReportContainer.innerHTML = `<div class='packet-section'><p>${filterOnlyErrorsSheetCheckbox.checked ? 'Автоматы с ошибками не найдены.' : 'Нет данных для отображения (возможно, все отсеки были "Отсек X").'}</p></div>`;
+                packetFormContainer.innerHTML = ""; 
+            } else {
+                packetFormContainer.innerHTML = "<div class='packet-section'><p>Данные из таблицы загружены. Выберите терминал для детального управления.</p></div>";
+            }
+
+            machinesToDisplay.forEach(machineData => {
+                // Убедимся, что у автомата есть что отображать ПОСЛЕ всех фильтраций
+                const hasContentToShow = machineData.parseError || (machineData.rows && machineData.rows.length > 0);
+
+                if (hasContentToShow) {
+                    const machineReportDiv = document.createElement('div');
+                    machineReportDiv.className = 'machine-report-block';
+                    let machineHtml = `<h3 class="machine-title">${machineData.name} ${machineData.address ? '(' + machineData.address + ')' : ''}</h3>`;
+
+                    if (machineData.parseError) {
+                        machineHtml += `<p style="color: var(--danger-color);">${machineData.parseError}</p>`;
+                    } 
+                    
+                    if (machineData.rows && machineData.rows.length > 0) {
+                        machineHtml += renderReadOnlyProductTable(machineData.rows); 
+                    } else if (!machineData.parseError && filterOnlyErrorsSheetCheckbox.checked) {
+                        // Если ошибок в товарах нет (массив rows пуст ПОСЛЕ фильтра по ошибкам),
+                        // но parseError тоже нет, и включен фильтр ошибок, то выводим это сообщение.
+                        machineHtml += `<p>Нет товаров с ошибками для этого автомата.</p>`;
+                    } else if (!machineData.parseError) { 
+                        // Если ошибок в товарах нет И parseError нет, И фильтр по ошибкам НЕ включен,
+                        // но массив rows пуст (значит, все были "Отсек X" и отфильтровались).
+                        machineHtml += `<p>Нет активных товаров для отображения у этого автомата (после фильтрации "Отсек X").</p>`;
+                    }
+                    
+                    // Отображаем доп. параметры, только если не было общей ошибки парсинга ИЛИ если они есть
+                    if (!machineData.parseError || machineData.allowed_errors !== null || machineData.uart_speed !== null || machineData.timestamp !== null) {
+                        machineHtml += `<div class="other-params-readonly">
+                                            <span>Доп.ошибок:</span> ${machineData.allowed_errors !== null && machineData.allowed_errors !== undefined ? machineData.allowed_errors : 'N/A'} |
+                                            <span>UART:</span> ${machineData.uart_speed !== null && machineData.uart_speed !== undefined ? machineData.uart_speed : 'N/A'} |
+                                            <span>Время:</span> ${formatTime(machineData.timestamp)}
+                                        </div>`;
+                    }
+                    machineReportDiv.innerHTML = machineHtml;
+                    allMachinesReportContainer.appendChild(machineReportDiv);
+                }
+            });
+
+            if (machinesToDisplay.length > 0) {
+                saveAllMachinesToCsvBtn.style.display = 'inline-block';
+            }
+        }
+
+
+        loadFromSheetBtn.addEventListener('click', () => { 
+            hideGlobalStatus(); hideFormStatusMessage();
+            salesDebugTableContainer.style.display = 'none';
+            loadFromSheetFilterOptions.style.display = 'flex'; 
+            
+            setLoadingState(true, loadFromSheetBtn, "Загрузка всех из таблицы...");
+            packetFormContainer.innerHTML = "<div class='packet-section'><p>Идет загрузка всех данных из Google Таблицы...</p></div>"; 
+            allMachinesReportContainer.innerHTML = ""; 
+            saveAllMachinesToCsvBtn.style.display = 'none';
+            allMachinesDataFromSheetCache = []; 
+
+            google.script.run
+                .withSuccessHandler(response => {
+                    setLoadingState(false, loadFromSheetBtn);
+                    if (response.error) {
+                        showStatus(`Ошибка загрузки из таблицы: ${response.error}`, 'error');
+                        packetFormContainer.innerHTML = `<div class='packet-section'><p style='color:var(--danger-color);'>Ошибка: ${response.error}</p></div>`;
+                        return;
+                    }
+                    if (!response.items || response.items.length === 0) {
+                        showStatus('Данные в таблице не найдены или лист пуст/некорректен.', 'warning');
+                        packetFormContainer.innerHTML = "<div class='packet-section'><p>Данные в таблице не найдены.</p></div>";
+                        return;
+                    }
+                    allMachinesDataFromSheetCache = response.items; 
+                    renderAllMachinesFromSheetCache(); 
+                })
+                .withFailureHandler(error => {
+                    setLoadingState(false, loadFromSheetBtn);
+                    showStatus(`Сбой при загрузке из таблицы: ${error.message}`, 'error');
+                    packetFormContainer.innerHTML = `<div class='packet-section'><p style='color:var(--danger-color);'>Сбой: ${error.message}</p></div>`;
+                })
+                .loadAllMachinesDataFromSheet(); 
+        });
+        
+        filterOnlyErrorsSheetCheckbox.addEventListener('change', renderAllMachinesFromSheetCache);
+
+
+        if (!terminalIdInput.dataset.selectedTerminalName) {
+            packetFormContainer.innerHTML = "<div class='packet-section'><p>Выберите терминал для отображения данных или воспользуйтесь кнопками для пакетных операций.</p></div>";
+        }
+
+        issueProductBtn.addEventListener('click', () => { 
+            hideGlobalStatus(); hideFormStatusMessage();
+            salesDebugTableContainer.style.display = 'none'; 
+            salesDebugTableBody.innerHTML = '';
+
+
+            const itemIdForCommand = productInput.dataset.itemId; 
+            const productNameForCheck = productInput.value;    
+            const numericMachineId = terminalIdInput.dataset.selectedMachineId; 
+
+            if (!itemIdForCommand) { showStatus('Выберите товар (не найден ID для команды)!', 'warning'); return; }
+            if (!productNameForCheck) { showStatus('Выберите товар (не найдено имя для проверки)!', 'warning'); return; }
+            if (!numericMachineId) { showStatus('ID автомата не определен (числовой). Выберите автомат из списка.', 'warning'); return; }
+            
+            const params = getCurrentTerminalParamsForCommand();
+            if (!params) return;
+            
+            const timestampBeforeCommandClient = new Date().toISOString();
+
+            params.str_parameter1 = `{gm=${itemIdForCommand};}`;
+            strParameter1Input.value = params.str_parameter1;
+            strParameter1Input.style.backgroundColor = '#d4edda';
+            setTimeout(() => { strParameter1Input.style.backgroundColor = ''; }, 700);
+
+            sendCommandAndMonitor(params, issueProductBtn, `Команда "Выдать ${productNameForCheck}" (ID для команды:${itemIdForCommand}) отправлена. Ожидание обновления данных...`, 
+                (token, machineId, productName) => pollForSalesConfirmation(token, machineId, productName, timestampBeforeCommandClient)
+            );
+        });
+
+        sendCommandBtn.addEventListener('click', () => {
+            hideGlobalStatus(); hideFormStatusMessage();
+            salesDebugTableContainer.style.display = 'none';
+            const params = getCurrentTerminalParamsForCommand(); if (!params) return;
+            params.str_parameter1 = strParameter1Input.value.trim();
+            if (!params.str_parameter1) { showStatus('Введите параметр 1!', 'warning'); return; }
+            sendCommandAndMonitor(params, sendCommandBtn, "Команда отправлена. Ожидание обновления данных...", null);
+        });
+
+        checkStatusCommandBtn.addEventListener('click', () => {
+            hideGlobalStatus(); hideFormStatusMessage();
+            salesDebugTableContainer.style.display = 'none';
+            const params = getCurrentTerminalParamsForCommand(); if (!params) return;
+            params.str_parameter1 = "{zapros}";
+            strParameter1Input.value = params.str_parameter1;
+            sendCommandAndMonitor(params, checkStatusCommandBtn, "Команда {zapros} отправлена. Ожидание обновления данных...", null);
+        });
+
+        startRemoteReportBtn.addEventListener('click', () => {
+            hideGlobalStatus(); hideFormStatusMessage();
+            salesDebugTableContainer.style.display = 'none';
+            loadFromSheetFilterOptions.style.display = 'none';
+            setLoadingState(true, startRemoteReportBtn, "Запуск...");
+            showStatus("Запрос на запуск удаленного формирования отчета отправлен...", "info", 0); 
+            if (remoteReportStatusIntervalId) clearInterval(remoteReportStatusIntervalId); 
+            remoteReportStatusIntervalId = setInterval(() => fetchRemoteReportStatusAndUpdateDisplay(false), 7000); 
+            google.script.run
+                .withSuccessHandler(response => {
+                    setLoadingState(false, startRemoteReportBtn);
+                    showStatus(response, response.toLowerCase().startsWith("ошибка") ? "error" : "success", 10000);
+                })
+                .withFailureHandler(error => {
+                    setLoadingState(false, startRemoteReportBtn);
+                    showStatus("Ошибка при запуске удаленного отчета: " + error.message, "error");
+                    if (remoteReportStatusIntervalId) clearInterval(remoteReportStatusIntervalId); remoteReportStatusIntervalId = null;
+                })
+                .startRemoteReportGeneration();
+        });
+    });
+  </script>
+</body>
+</html>
