@@ -1,6 +1,7 @@
 /*******************************************************
 Code.gs
 *******************************************************/
+// Updated: 2025-07-23
 const SPREADSHEET_ID = '18iZ3agRiDdMebNNQVMZMBJJE7AkQ8h4tAHmH6zn0_R4'; // ЗАМЕНИТЕ НА ВАШ ID ТАБЛИЦЫ
 const API_TOKEN = 'fe38f8470367451f81228617'; // ВАШ РАБОЧИЙ ТОКЕН
 
@@ -39,8 +40,7 @@ function fetchApiData_(url, errorMessagePrefix) {
 }
 
 // --- Основные функции ---
-function doGet() { return HtmlService.createTemplateFromFile("Index").evaluate().setTitle("Отчёты Vendista").setFaviconUrl("https://ssl.gstatic.com/docs/doclist/images/infinite_arrow_favicon_5.ico");}
-function include(filename) { return HtmlService.createTemplateFromFile(filename).getRawContent();}
+function showReports() { return HtmlService.createTemplateFromFile("Index").evaluate().setTitle("Отчёты Vendista").setFaviconUrl("https://ssl.gstatic.com/docs/doclist/images/infinite_arrow_favicon_5.ico");}
 
 function cronLoadAll() {
   const today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyy-MM-dd");
