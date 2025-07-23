@@ -2,7 +2,7 @@
  * Unified doGet to serve all three reports. Uses ?view=reports|machines|remote
  * Default is a simple menu.
  */
-// Updated: 2025-07-23
+// Updated: 2025-07-24
 function doGet(e) {
   var view = (e && e.parameter && e.parameter.view) || 'menu';
   if (view === 'reports') {
