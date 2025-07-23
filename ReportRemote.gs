@@ -1,7 +1,7 @@
 /**
  * @OnlyCurrentDoc
  */
-// Updated: 2025-07-24
+main
 // ... (константы и начало кода без изменений) ...
 const SPREADSHEET_ID = "18Hx_V3lPBQYp4xcpopQPjQ5dR7cCtaWpESb1EM92gqI"; // ID ВАШЕЙ GOOGLE ТАБЛИЦЫ
 const SHEET_NAME = "АвтоматическийОтчет";
