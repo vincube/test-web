@@ -1,6 +1,7 @@
 /**
  * @OnlyCurrentDoc
  */
+// Updated: 2025-07-24
 const SPREADSHEET_ID = "18Hx_V3lPBQYp4xcpopQPjQ5dR7cCtaWpESb1EM92gqI"; 
 const SHEET_NAME = "АвтоматическийОтчет";
 const VENDISTA_API_BASE_URL = "https://api.vendista.ru:99";
@@ -99,13 +100,10 @@ function _vendistaApiFetch(endpoint, method = 'get', token = null, payload = nul
 }
 
 // --- Функции для веб-интерфейса ---
-function doGet(e) {
+function showMachines(e) {
   return HtmlService.createTemplateFromFile("Index").evaluate()
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .setTitle("Управление автоматами Vendista");
-}
-function include(filename) {
-  return HtmlService.createTemplateFromFile(filename).getRawContent();
 }
 
 // --- Ingredients API ---
