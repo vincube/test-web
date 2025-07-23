@@ -99,13 +99,10 @@ function _vendistaApiFetch(endpoint, method = 'get', token = null, payload = nul
 }
 
 // --- Функции для веб-интерфейса ---
-function doGet(e) {
+function showMachines(e) {
   return HtmlService.createTemplateFromFile("Index").evaluate()
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .setTitle("Управление автоматами Vendista");
-}
-function include(filename) {
-  return HtmlService.createTemplateFromFile(filename).getRawContent();
 }
 
 // --- Ingredients API ---
