@@ -1,6 +1,7 @@
 /**
  * @OnlyCurrentDoc
  */
+ main
 const SPREADSHEET_ID = "18Hx_V3lPBQYp4xcpopQPjQ5dR7cCtaWpESb1EM92gqI"; 
 const SHEET_NAME = "АвтоматическийОтчет";
 const VENDISTA_API_BASE_URL = "https://api.vendista.ru:99";
