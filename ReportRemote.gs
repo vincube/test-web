@@ -19,7 +19,7 @@ const NUM_COLUMNS_MAIN_TABLE = 8;
 // --- Функции для веб-интерфейса ---
 // doGet, include, updateData, fetchPacketlog, parseCustomPacketToFields, loadMachineList, loadProductMatrix, loadMachineIngredients, sendCommand, formatVendistaDateTime, fetchSalesList - БЕЗ ИЗМЕНЕНИЙ
 function showRemote(e) {
-  return HtmlService.createTemplateFromFile("Index").evaluate()
+  return HtmlService.createTemplateFromFile("Index3").evaluate()
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .setTitle("Управление товарами и журнал пакетов");
 }

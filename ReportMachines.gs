@@ -101,7 +101,7 @@ function _vendistaApiFetch(endpoint, method = 'get', token = null, payload = nul
 
 // --- Функции для веб-интерфейса ---
 function showMachines(e) {
-  return HtmlService.createTemplateFromFile("Index").evaluate()
+  return HtmlService.createTemplateFromFile("Index2").evaluate()
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
     .setTitle("Управление автоматами Vendista");
 }
